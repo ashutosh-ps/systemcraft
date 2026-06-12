@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dde7ff;
+  --color-brand-200: #c2d4ff;
+  --color-brand-300: #9cb8ff;
+  --color-brand-400: #7290ff;
+  --color-brand-500: #4f68fb;
+  --color-brand-600: #3a45f0;
+  --color-brand-700: #2f35d4;
+  --color-brand-800: #292fab;
+  --color-brand-900: #272e87;
+  --color-brand-950: #171a4e;
+
+  --color-surface-50: #f8fafc;
+  --color-surface-100: #f1f5f9;
+  --color-surface-200: #e2e8f0;
+  --color-surface-300: #cbd5e1;
+  --color-surface-400: #94a3b8;
+  --color-surface-500: #64748b;
+  --color-surface-600: #475569;
+  --color-surface-700: #334155;
+  --color-surface-800: #1e293b;
+  --color-surface-850: #172033;
+  --color-surface-900: #0f172a;
+  --color-surface-950: #080d1a;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-surface-50 text-surface-800 antialiased dark:bg-surface-950 dark:text-surface-200;
+}
+
+::selection {
+  @apply bg-brand-500/30;
+}
+
+/* Thin scrollbars for sidebar */
+.sc-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-300) transparent;
+}
+.dark .sc-scroll {
+  scrollbar-color: var(--color-surface-700) transparent;
+}
+
+/* Prose defaults used by the markdown renderer */
+.sc-prose {
+  @apply leading-relaxed text-[15px] text-surface-700 dark:text-surface-300;
+}
+
+/* Print styles: hide chrome, show content for "Save as PDF" */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-full {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
