@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Clock, Download, Printer } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { CommonMistakes, CloudMappings, DifficultyBadge, InterviewQuestions, RelatedTopics } from '../components/module/ModuleExtras'
+import { Flashcards } from '../components/module/Flashcards'
 import { Quiz } from '../components/module/Quiz'
 import { SectionRenderer } from '../components/module/SectionRenderer'
 import { useProgress } from '../context/ProgressContext'
@@ -88,6 +89,9 @@ export function ModulePage() {
         <CloudMappings mappings={mod.cloudMappings} />
         <CommonMistakes mistakes={mod.commonMistakes} />
         <InterviewQuestions questions={mod.interviewQuestions} />
+        <div className="no-print">
+          <Flashcards module={mod} />
+        </div>
         <div className="no-print">
           <Quiz moduleId={mod.id} questions={mod.quiz} />
         </div>
