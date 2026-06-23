@@ -1,43 +1,11 @@
 import { motion } from 'framer-motion'
-import {
-  ArrowRight,
-  BookOpen,
-  Clock,
-  Flame,
-  GraduationCap,
-  Layers,
-  Quote,
-  Search,
-  Sparkles,
-  Star,
-  Workflow,
-} from 'lucide-react'
+import { ArrowRight, BookOpen, Clock, Flame, GraduationCap, Layers, Search, Sparkles, Workflow } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DifficultyBadge } from '../components/module/ModuleExtras'
 import { useProgress } from '../context/ProgressContext'
 import { categories, modulesInCategory, orderedModules, totalCourseMinutes } from '../data/course'
 
 const POPULAR_IDS = ['caching', 'databases', 'design-instagram', 'sharding', 'load-balancing', 'design-uber']
-
-const TESTIMONIALS = [
-  {
-    quote:
-      'The interactive diagrams finally made consistent hashing click for me. Passed my E5 loop at a FAANG two weeks later.',
-    name: 'Priya S.',
-    role: 'Senior SWE',
-  },
-  {
-    quote:
-      'Most courses hand-wave the numbers. This one makes you calculate QPS and storage until it becomes second nature.',
-    name: 'Marcus T.',
-    role: 'Staff Engineer',
-  },
-  {
-    quote: 'The case studies mirror real interview flow: requirements → estimates → design → deep dives. Exactly right.',
-    name: 'Elena R.',
-    role: 'Engineering Manager',
-  },
-]
 
 const STATS = [
   { icon: BookOpen, value: '19', label: 'In-depth modules' },
@@ -230,47 +198,6 @@ function PopularTopics() {
   )
 }
 
-function Testimonials() {
-  return (
-    <section className="mx-auto max-w-5xl px-4 py-20">
-      <h2 className="text-center text-2xl font-extrabold tracking-tight text-surface-900 dark:text-white">
-        What learners say
-      </h2>
-      <div className="mt-8 grid gap-4 lg:grid-cols-3">
-        {TESTIMONIALS.map((t, i) => (
-          <motion.figure
-            key={t.name}
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.1 }}
-            className="rounded-2xl border border-surface-200 bg-white p-6 dark:border-surface-700 dark:bg-surface-900"
-          >
-            <Quote className="h-5 w-5 text-brand-300 dark:text-brand-700" />
-            <blockquote className="mt-3 text-sm leading-relaxed text-surface-600 dark:text-surface-300">
-              {t.quote}
-            </blockquote>
-            <figcaption className="mt-4 flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-violet-500 text-xs font-bold text-white">
-                {t.name[0]}
-              </span>
-              <span>
-                <span className="block text-sm font-semibold text-surface-900 dark:text-surface-100">{t.name}</span>
-                <span className="block text-xs text-surface-400">{t.role}</span>
-              </span>
-              <span className="ml-auto flex gap-0.5">
-                {Array.from({ length: 5 }).map((_, j) => (
-                  <Star key={j} className="h-3 w-3 fill-amber-400 text-amber-400" />
-                ))}
-              </span>
-            </figcaption>
-          </motion.figure>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 export function HomePage({ onSearch }: { onSearch: () => void }) {
   return (
     <div>
@@ -278,7 +205,6 @@ export function HomePage({ onSearch }: { onSearch: () => void }) {
       <StatsRow />
       <LearningPath />
       <PopularTopics />
-      <Testimonials />
       <footer className="border-t border-surface-200 py-10 text-center text-xs text-surface-400 dark:border-surface-800">
         <p>
           SystemCraft · {orderedModules.length} modules · ~{Math.round(totalCourseMinutes / 60)} hours of content ·
