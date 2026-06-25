@@ -72,7 +72,7 @@ export function Quiz({ moduleId, questions }: { moduleId: string; questions: Qui
             </p>
             <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
               {correctCount / questions.length >= 0.6
-                ? 'Nice — module marked complete. ✅'
+                ? 'Nice. Module marked complete. ✅'
                 : 'Score 60%+ to mark this module complete. Review the sections above and retry.'}
             </p>
             <button

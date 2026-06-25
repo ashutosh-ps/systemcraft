@@ -2,7 +2,7 @@ import { Check, Copy } from 'lucide-react'
 import React, { useState } from 'react'
 
 /**
- * Lightweight regex-based syntax highlighter — enough for the short
+ * Lightweight regex-based syntax highlighter. Enough for the short
  * pseudo-code, SQL, JS/TS, Python, JSON and shell snippets in course content.
  */
 
@@ -54,7 +54,7 @@ export function CodeBlock({ title, language, code }: { title?: string; language:
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      // clipboard unavailable (e.g. insecure context) — silently ignore
+      // clipboard unavailable (e.g. insecure context). Silently ignore
     }
   }
 

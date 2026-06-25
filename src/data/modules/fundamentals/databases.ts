@@ -16,24 +16,24 @@ const databases: Module = {
       title: 'The relational model and ACID',
       md: `
 Relational databases store data in normalized tables and let you recombine it at query time with joins. The killer
-feature isn't SQL syntax — it's **ACID transactions**, which let you treat a multi-step change as one atomic unit:
+feature isn't SQL syntax; it's **ACID transactions**, which let you treat a multi-step change as one atomic unit:
 
-- **Atomicity** — a transfer debits account A and credits account B, or does neither. No half-transfers, even if
+- **Atomicity:** a transfer debits account A and credits account B, or does neither. No half-transfers, even if
   the server dies between the two updates.
-- **Consistency** — constraints hold before and after: \`balance >= 0\`, foreign keys resolve, uniqueness is
+- **Consistency:** constraints hold before and after: \`balance >= 0\`, foreign keys resolve, uniqueness is
   enforced *by the database*, not by hopeful application code.
-- **Isolation** — two users buying the last concert ticket don't both succeed. Postgres defaults to
+- **Isolation:** two users buying the last concert ticket don't both succeed. Postgres defaults to
   \`READ COMMITTED\`; bumping to \`SERIALIZABLE\` closes subtle anomalies at a ~10–30% throughput cost.
-- **Durability** — once committed, the write survives a crash, because it was fsynced to the WAL
+- **Durability:** once committed, the write survives a crash, because it was fsynced to the WAL
   (write-ahead log) before the client got its OK.
 
 What this buys you in practice: a single Postgres node on decent hardware (16–32 vCPU, NVMe) sustains roughly
-**5,000–50,000 transactions/second** depending on transaction complexity — pgbench-style simple transactions land
+**5,000–50,000 transactions/second** depending on transaction complexity: pgbench-style simple transactions land
 near the top, multi-table writes with index updates near the bottom. That is *plenty* for the vast majority of
 businesses; Stack Overflow famously ran on a handful of SQL Server boxes while serving ~1.3B pageviews/month.
 
 > Interview rule: start with a relational database **by default**. You should need a *reason* to leave ACID,
-> joins, and 50 years of tooling — "we might be big someday" is not one.
+> joins, and 50 years of tooling. "We might be big someday" is not one.
 `,
     },
     {
@@ -45,7 +45,7 @@ Under every database is one of two storage engine families, and the choice dicta
 #### B-trees (Postgres, MySQL/InnoDB, SQL Server)
 
 Data lives in fixed-size pages (8–16 KB) in a balanced tree. Reading a row in a billion-row table touches
-**3–4 pages** — with the upper levels cached in RAM, that's often a single disk read. But writes update pages
+**3–4 pages**, and with the upper levels cached in RAM, that's often a single disk read. But writes update pages
 **in place**: a single row change rewrites a whole page, and a write that touches 5 indexes dirties 6+ pages.
 Random in-place writes are exactly what disks (even SSDs) like least.
 
@@ -54,13 +54,13 @@ Random in-place writes are exactly what disks (even SSDs) like least.
 
 #### LSM-trees (Cassandra, RocksDB, LevelDB, HBase, ScyllaDB)
 
-Writes go to an in-memory memtable and a sequential commit log — **append-only, no random I/O** — then flush to
+Writes go to an in-memory memtable and a sequential commit log (**append-only, no random I/O**), then flush to
 immutable sorted files (SSTables). Background **compaction** merges files and discards overwritten values. This is
-why Cassandra sustains **10,000–15,000 writes/s per node** and clusters scale linearly — Netflix has run
+why Cassandra sustains **10,000–15,000 writes/s per node** and clusters scale linearly; Netflix has run
 benchmarks past **1M writes/s** on large clusters.
 
 The bill arrives on reads: a key may live in the memtable or any of several SSTables, so a read can check multiple
-files (bloom filters cut most of these to ~1 disk read). And compaction re-writes data repeatedly —
+files (bloom filters cut most of these to ~1 disk read). And compaction re-writes data repeatedly, giving
 **write amplification of 10–30×** at the disk level, paid in background I/O instead of foreground latency.
 
 > Mnemonic: **B-tree = pay at write time, read fast. LSM = write fast, pay at read + compaction time.** Choose by
@@ -74,52 +74,52 @@ files (bloom filters cut most of these to ~1 disk read). And compaction re-write
 "NoSQL" is four different data models that happen to share a marketing label. Each one gives up part of the
 relational toolkit to win something specific.
 
-#### Key-value stores — Redis, DynamoDB, etcd
+#### Key-value stores: Redis, DynamoDB, etcd
 
 The simplest contract: \`GET(key)\`, \`PUT(key, value)\`. No joins, no secondary queries (or limited ones), and in
 exchange you get predictable, low, *flat* latency at any scale. **DynamoDB delivers single-digit-millisecond reads
 and writes whether you store 1 GB or 100 TB**, because every operation is a hash-partition lookup. Pricing is
 per-request: about **$1.25 per million write request units and $0.25 per million reads** (on-demand), which makes
-costs linear and predictable — and makes scan-heavy access patterns ruinously expensive.
+costs linear and predictable, and makes scan-heavy access patterns ruinously expensive.
 
 - **Use when:** sessions, carts, feature flags, user profiles fetched by ID, anything shaped like "lookup by key."
 - **Avoid when:** you need ad-hoc queries, aggregations, or access by anything other than the key you designed for.
 
-#### Document stores — MongoDB, Firestore, Couchbase
+#### Document stores: MongoDB, Firestore, Couchbase
 
 Values become structured JSON/BSON documents you can index and query *inside*. The natural fit is data that's
 read and written as one aggregate: a product with its variants, an order with its line items. One document read
-replaces a 4-way join. Schema is flexible — great for fast-moving product teams, dangerous without discipline
+replaces a 4-way join. Schema is flexible: great for fast-moving product teams, dangerous without discipline
 (you *will* end up with five spellings of the same field unless you validate at the application boundary).
 
 - **Use when:** aggregate-shaped data, heterogeneous records, rapid iteration.
 - **Avoid when:** data is highly relational (many-to-many everywhere) or you need multi-document transactions as
-  a core pattern — possible in MongoDB since 4.0, but it's swimming upstream.
+  a core pattern. It is possible in MongoDB since 4.0, but it's swimming upstream.
 `,
     },
     {
       type: 'text',
       title: 'NoSQL families II: wide-column and graph',
       md: `
-#### Wide-column stores — Cassandra, ScyllaDB, HBase, Bigtable
+#### Wide-column stores: Cassandra, ScyllaDB, HBase, Bigtable
 
 Think "two-level key-value": a partition key locates the node, a clustering key sorts rows *within* the partition.
-You model **queries, not entities** — each table is pre-built to answer one access pattern, and data is duplicated
+You model **queries, not entities**: each table is pre-built to answer one access pattern, and data is duplicated
 across tables as needed. LSM storage plus leaderless replication gives Cassandra linear write scaling and no
 single point of failure; Apple has publicly described clusters of **thousands of nodes storing petabytes**.
 
-- **Use when:** write-heavy time-series, event logs, messaging history, IoT telemetry — append-mostly data
+- **Use when:** write-heavy time-series, event logs, messaging history, IoT telemetry, all append-mostly data
   queried by a known key + time range.
 - **Avoid when:** you need ad-hoc queries, transactions, or you can't enumerate your access patterns up front.
 
-#### Graph databases — Neo4j, Amazon Neptune
+#### Graph databases: Neo4j, Amazon Neptune
 
 Nodes and edges are first-class, and traversals follow direct pointers instead of join algorithms. The win is
 **multi-hop queries**: "friends-of-friends who like X" is a 3-hop traversal that runs in milliseconds, while the
 SQL equivalent is a triple self-join whose cost explodes with depth. The trade: graph DBs shard poorly (cutting a
 graph across machines makes traversals network-bound), so most deployments stay vertically scaled.
 
-- **Use when:** the *relationships* are the product — social graphs, fraud rings, recommendations, dependency
+- **Use when:** the *relationships* are the product: social graphs, fraud rings, recommendations, dependency
   analysis.
 - **Avoid when:** you have a graph-shaped query twice a day. A recursive CTE in Postgres handles shallow
   traversals fine; don't add a database for one query.
@@ -133,12 +133,12 @@ graph across machines makes traversals network-bound), so most deployments stay 
 
 Normalization removes duplication so every fact lives in one place. **Denormalization deliberately re-introduces
 duplication so reads don't have to assemble facts at query time.** Storing \`author_name\` on every post means the
-feed query skips a join — and means renaming an author touches a million rows. You're converting one expensive
+feed query skips a join, and means renaming an author touches a million rows. You're converting one expensive
 read pattern into a write-time obligation plus a consistency liability.
 
 Do it when (a) the read:write ratio is heavily skewed (100:1 feeds, catalogs), (b) the duplicated field changes
 rarely, and (c) you have a mechanism (async backfill job, CDC consumer) to repair drift. In NoSQL, denormalization
-isn't an optimization — it's the *required modeling style*, because there are no joins to skip.
+isn't an optimization; it's the *required modeling style*, because there are no joins to skip.
 
 #### Indexes are not free
 
@@ -152,7 +152,7 @@ write**. Rules of thumb:
 - The flip side is dramatic: a missing index turns a 2 ms lookup into a 4-second sequential scan on a 10M-row
   table.
 
-> Habit to demonstrate in interviews: design indexes *from the query list*, not the schema — and say out loud
+> Habit to demonstrate in interviews: design indexes *from the query list*, not the schema, and say out loud
 > which writes each index taxes.
 `,
     },
@@ -264,7 +264,7 @@ LIMIT 10;
             kind: 'db',
             x: 450,
             y: 40,
-            detail: 'Source of truth for orders, payments, inventory — anything needing ACID. One primary (~10–30K TPS) plus replicas. Deliberately kept small and boring.',
+            detail: 'Source of truth for orders, payments, inventory, anything needing ACID. One primary (~10–30K TPS) plus replicas. Deliberately kept small and boring.',
           },
           {
             id: 'redis',
@@ -288,7 +288,7 @@ LIMIT 10;
             kind: 'storage',
             x: 450,
             y: 390,
-            detail: 'Product images, invoices, ML training exports. $0.023/GB-month, 11 nines durability — three orders of magnitude cheaper per GB than any database above.',
+            detail: 'Product images, invoices, ML training exports. $0.023/GB-month, 11 nines durability: three orders of magnitude cheaper per GB than any database above.',
           },
           {
             id: 'kafka',
@@ -296,7 +296,7 @@ LIMIT 10;
             kind: 'queue',
             x: 660,
             y: 40,
-            detail: 'Debezium tails the Postgres WAL and publishes row changes as ordered events. Derived stores subscribe instead of being dual-written — one source of truth, no write skew.',
+            detail: 'Debezium tails the Postgres WAL and publishes row changes as ordered events. Derived stores subscribe instead of being dual-written: one source of truth, no write skew.',
           },
           {
             id: 'es',
@@ -304,7 +304,7 @@ LIMIT 10;
             kind: 'search',
             x: 850,
             y: 40,
-            detail: 'Full-text product search with typo tolerance and facets — queries Postgres is terrible at. Indexes lag the source by ~1–2 s via the CDC pipeline, which search tolerates fine.',
+            detail: 'Full-text product search with typo tolerance and facets, queries Postgres is terrible at. Indexes lag the source by ~1–2 s via the CDC pipeline, which search tolerates fine.',
           },
         ],
         edges: [
@@ -325,11 +325,11 @@ LIMIT 10;
       numbers: [
         { metric: 'Postgres single node', value: '5–50K TPS', context: 'Simple transactions on 16–32 vCPU; complex multi-index writes sit at the low end.' },
         { metric: 'Indexed point query', value: '0.1–2 ms', context: 'B-tree descent with hot pages in RAM. The baseline for "the database is fast."' },
-        { metric: 'DynamoDB latency', value: '<10 ms p99', context: 'Single-digit milliseconds at 1 GB or 100 TB — flat latency is the whole pitch.' },
-        { metric: 'DynamoDB on-demand price', value: '$1.25/M writes', context: 'Reads $0.25/M. Linear, predictable — and why table scans are a budget incident.' },
+        { metric: 'DynamoDB latency', value: '<10 ms p99', context: 'Single-digit milliseconds at 1 GB or 100 TB; flat latency is the whole pitch.' },
+        { metric: 'DynamoDB on-demand price', value: '$1.25/M writes', context: 'Reads $0.25/M. Linear and predictable, and why table scans are a budget incident.' },
         { metric: 'Cassandra per node', value: '~10–15K writes/s', context: 'LSM + leaderless replication; add nodes for linear scaling into the millions.' },
         { metric: 'Secondary index cost', value: '+5–15% per write', context: 'Each index is a synchronously-maintained copy. Eight indexes can double insert time.' },
-        { metric: 'LSM write amplification', value: '10–30×', context: 'Compaction rewrites data repeatedly in the background — budget disk I/O for it.' },
+        { metric: 'LSM write amplification', value: '10–30×', context: 'Compaction rewrites data repeatedly in the background; budget disk I/O for it.' },
       ],
     },
   ],
@@ -337,10 +337,10 @@ LIMIT 10;
     {
       question: 'Which storage engine choice best fits an ingest service absorbing 200K sensor writes/second with occasional range reads by device and time?',
       options: [
-        'B-tree engine (Postgres) — strongest consistency',
-        'LSM-tree engine (Cassandra/ScyllaDB) — sequential appends, linear write scaling',
-        'Graph database — sensors are connected to each other',
-        'Document store — flexible sensor schemas',
+        'B-tree engine (Postgres): strongest consistency',
+        'LSM-tree engine (Cassandra/ScyllaDB): sequential appends, linear write scaling',
+        'Graph database: sensors are connected to each other',
+        'Document store: flexible sensor schemas',
       ],
       answer: 1,
       explanation:
@@ -351,14 +351,14 @@ LIMIT 10;
       options: ['Durability', 'Isolation', 'Consistency', 'Atomicity'],
       answer: 3,
       explanation:
-        'Atomicity makes the two updates one all-or-nothing unit — a crash between them rolls both back. Isolation handles concurrent transactions; durability handles surviving the crash after commit.',
+        'Atomicity makes the two updates one all-or-nothing unit, so a crash between them rolls both back. Isolation handles concurrent transactions; durability handles surviving the crash after commit.',
     },
     {
       question: 'Your team adds a 7th secondary index to a hot orders table. The most likely consequence is:',
       options: [
         'Insert/update throughput drops noticeably, since every write now maintains 7 sorted structures',
         'Reads get slower because the planner is confused',
-        'Nothing — indexes only cost disk space',
+        'Nothing; indexes only cost disk space',
         'Deadlocks disappear',
       ],
       answer: 0,
@@ -368,52 +368,52 @@ LIMIT 10;
     {
       question: 'Storing author_name on every post row (instead of joining to users) is an example of:',
       options: [
-        'Normalization — it follows third normal form',
+        'Normalization: it follows third normal form',
         'A schema migration',
-        'Denormalization — trading write-time duplication for read-time speed',
+        'Denormalization: trading write-time duplication for read-time speed',
         'An ACID violation',
       ],
       answer: 2,
       explanation:
-        'Denormalization duplicates a fact so reads skip a join, at the cost of updating many rows when the fact changes. Right call for 100:1 read:write ratios on rarely-changing fields — with a repair mechanism for drift.',
+        'Denormalization duplicates a fact so reads skip a join, at the cost of updating many rows when the fact changes. Right call for 100:1 read:write ratios on rarely-changing fields, with a repair mechanism for drift.',
     },
     {
       question: 'Why does DynamoDB stay at single-digit-millisecond latency even at 100 TB, while a single Postgres node would not?',
       options: [
         'DynamoDB runs on faster hardware',
-        'Every operation is a hash-partition key lookup routed to one partition — work per request stays constant as data grows',
+        'Every operation is a hash-partition key lookup routed to one partition, so work per request stays constant as data grows',
         'DynamoDB caches everything in RAM',
         'It skips durability, so writes are faster',
       ],
       answer: 1,
       explanation:
-        'DynamoDB shards by partition key automatically, so each request touches a constant-size slice regardless of total table size. The price: you must access data by that key — ad-hoc queries become scans.',
+        'DynamoDB shards by partition key automatically, so each request touches a constant-size slice regardless of total table size. The price: you must access data by that key, and ad-hoc queries become scans.',
     },
   ],
   interviewQuestions: [
     {
       question: 'When would you choose a NoSQL database over a relational one? Give a concrete scenario for each direction.',
-      hint: 'Structure: default to relational (ACID, joins, ad-hoc queries) and name the breaking points — write volume beyond one node, key-lookup scale, enumerable access patterns. NoSQL example: session store or event firehose on DynamoDB/Cassandra. SQL example: payments/inventory needing multi-row transactions. Strong answers mention that the choice is per-dataset, not per-company.',
+      hint: 'Structure: default to relational (ACID, joins, ad-hoc queries) and name the breaking points: write volume beyond one node, key-lookup scale, enumerable access patterns. NoSQL example: session store or event firehose on DynamoDB/Cassandra. SQL example: payments/inventory needing multi-row transactions. Strong answers mention that the choice is per-dataset, not per-company.',
       difficulty: 'Junior',
     },
     {
       question: 'Explain B-tree vs LSM-tree storage to a teammate, and tell me which you would pick for a chat app storing message history.',
-      hint: 'Expected: B-tree = in-place pages, cheap reads, random-write cost; LSM = append-only memtable/SSTables + compaction, cheap writes, read and compaction amplification (bloom filters as mitigation). Chat history is append-heavy and read by (conversation, time range) — a wide-column LSM store partitioned by conversation ID fits; cite Discord moving messages from MongoDB to Cassandra then ScyllaDB.',
+      hint: 'Expected: B-tree = in-place pages, cheap reads, random-write cost; LSM = append-only memtable/SSTables + compaction, cheap writes, read and compaction amplification (bloom filters as mitigation). Chat history is append-heavy and read by (conversation, time range), so a wide-column LSM store partitioned by conversation ID fits; cite Discord moving messages from MongoDB to Cassandra then ScyllaDB.',
       difficulty: 'Mid',
     },
     {
       question: 'Your product search runs LIKE queries on Postgres and takes 4 seconds. Walk me through the fix without breaking order processing.',
-      hint: 'Diagnose: leading-wildcard LIKE cannot use a B-tree index — it sequential-scans. Options ladder: pg_trgm/GIN or tsvector full-text inside Postgres first; if relevance/facets/typo-tolerance are needed, add Elasticsearch/OpenSearch fed by CDC (Debezium → Kafka), never dual writes. Address lag (~1–2 s), reindexing strategy, and keeping Postgres as the source of truth.',
+      hint: 'Diagnose: leading-wildcard LIKE cannot use a B-tree index, so it sequential-scans. Options ladder: pg_trgm/GIN or tsvector full-text inside Postgres first; if relevance/facets/typo-tolerance are needed, add Elasticsearch/OpenSearch fed by CDC (Debezium → Kafka), never dual writes. Address lag (~1–2 s), reindexing strategy, and keeping Postgres as the source of truth.',
       difficulty: 'Mid',
     },
     {
       question: 'Design the data layer for an e-commerce platform at 50M users: catalog, carts, orders, search, and analytics. Justify every store you add.',
-      hint: 'Looking for polyglot persistence with restraint: Postgres (sharded or Aurora) for orders/inventory with ACID; Redis for carts/sessions; search via OpenSearch fed by CDC; events to Kafka with a warehouse (BigQuery/Snowflake) for analytics; S3 for media. Each store must be justified by an access pattern, with a stated sync mechanism and consistency story — and a pushback on any store that doesn’t earn its operational cost.',
+      hint: 'Looking for polyglot persistence with restraint: Postgres (sharded or Aurora) for orders/inventory with ACID; Redis for carts/sessions; search via OpenSearch fed by CDC; events to Kafka with a warehouse (BigQuery/Snowflake) for analytics; S3 for media. Each store must be justified by an access pattern, with a stated sync mechanism and consistency story, plus a pushback on any store that doesn’t earn its operational cost.',
       difficulty: 'Senior',
     },
   ],
   commonMistakes: [
-    'Choosing NoSQL "for scale" at 200 QPS. A single Postgres node handles thousands of TPS; what you actually gave up is joins, constraints, and transactions — things you needed on day one.',
+    'Choosing NoSQL "for scale" at 200 QPS. A single Postgres node handles thousands of TPS; what you actually gave up is joins, constraints, and transactions, things you needed on day one.',
     'Modeling DynamoDB or Cassandra like a relational schema, then "querying" with scans. Wide-column and key-value stores require designing tables from the access-pattern list; if you can\'t enumerate the queries, you\'ve chosen the wrong store.',
     'Dual-writing to keep two stores in sync (e.g., Postgres + Elasticsearch from application code). One write will fail eventually and the stores drift forever. Use CDC from the source of truth instead.',
     'Indexing every column "to be safe." Each index taxes every write 5–15% and steals buffer-pool RAM. Build indexes from the slow-query log and the query list, and drop unused ones (pg_stat_user_indexes shows zero-scan indexes).',
@@ -423,7 +423,7 @@ LIMIT 10;
     { concept: 'Managed relational (OLTP)', aws: 'RDS / Aurora PostgreSQL', gcp: 'Cloud SQL / AlloyDB', azure: 'Azure Database for PostgreSQL' },
     { concept: 'Serverless key-value / wide-column', aws: 'DynamoDB', gcp: 'Bigtable / Firestore', azure: 'Cosmos DB (NoSQL / Cassandra API)' },
     { concept: 'Document database', aws: 'DocumentDB (MongoDB-compatible)', gcp: 'Firestore', azure: 'Cosmos DB (MongoDB API)' },
-    { concept: 'Graph database', aws: 'Neptune', gcp: '— (Neo4j Aura from Marketplace)', azure: 'Cosmos DB (Gremlin API)' },
+    { concept: 'Graph database', aws: 'Neptune', gcp: '– (Neo4j Aura from Marketplace)', azure: 'Cosmos DB (Gremlin API)' },
     { concept: 'Full-text search', aws: 'OpenSearch Service', gcp: 'Elastic Cloud (partner) / Vertex AI Search', azure: 'Azure AI Search' },
     { concept: 'Change data capture / sync', aws: 'DMS / MSK + Debezium', gcp: 'Datastream', azure: 'Azure Data Factory CDC' },
   ],

@@ -58,7 +58,7 @@ export type CalculatorKind = 'qps' | 'storage' | 'bandwidth' | 'cache-sizing'
 /* ------------------------------- Comparison table ---------------------------- */
 
 export interface ComparisonSpec {
-  /** e.g. ['', 'SQL', 'NoSQL'] — first column holds the criterion name */
+  /** e.g. ['', 'SQL', 'NoSQL']. First column holds the criterion name */
   columns: string[]
   rows: string[][]
   /** Optional verdict line rendered under the table */

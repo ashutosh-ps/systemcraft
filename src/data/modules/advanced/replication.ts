@@ -25,16 +25,16 @@ const replication: Module = {
       title: 'Why replicate at all',
       md: `
 Replication means keeping the same data on multiple machines. Every serious database does it, for three distinct
-reasons — and being precise about *which one you're solving for* drives every later decision:
+reasons, and being precise about *which one you're solving for* drives every later decision:
 
-- **Read scaling.** A single Postgres primary tops out around 40–50K TPS, but most workloads are 90%+ reads. Five read replicas turn one box's read capacity into six — for the price of tolerating some staleness.
+- **Read scaling.** A single Postgres primary tops out around 40–50K TPS, but most workloads are 90%+ reads. Five read replicas turn one box's read capacity into six, for the price of tolerating some staleness.
 - **High availability.** Hardware dies (~1–2% annual disk failure rate; entire AZs go down a few times a decade). A warm replica turns "restore 5 TB from backup, RTO 8 hours" into "promote a replica, RTO 30 seconds."
 - **Geo-locality.** A user in Singapore reading from \`us-east-1\` pays ~200 ms round trip *per query*. A replica in \`ap-southeast-1\` cuts that to ~2 ms.
 
 Two definitions you must use correctly in any HA discussion:
 
-- **RPO (Recovery Point Objective)** — how much data you may lose. Async replication: RPO = replication lag at failure time (typically <1 s, can be minutes under load). Sync replication: RPO = 0.
-- **RTO (Recovery Time Objective)** — how long until you're serving again. Manual failover: 15–60 min. Automated: 30 s–2 min. Aurora advertises typically <30 s.
+- **RPO (Recovery Point Objective)**: how much data you may lose. Async replication: RPO = replication lag at failure time (typically <1 s, can be minutes under load). Sync replication: RPO = 0.
+- **RTO (Recovery Time Objective)**: how long until you're serving again. Manual failover: 15–60 min. Automated: 30 s–2 min. Aurora advertises typically <30 s.
 
 > The trade running through this whole module: replicas can be **consistent** or **independent**, never fully
 > both. Synchronous copies are consistent but couple their failures and latencies; asynchronous copies are
@@ -50,7 +50,7 @@ to **followers**. The design decision is *when the leader acknowledges the clien
 
 #### Asynchronous
 
-Leader commits locally, acks immediately, replicas catch up whenever. Zero write-latency penalty — and zero
+Leader commits locally, acks immediately, replicas catch up whenever. Zero write-latency penalty, and zero
 guarantee: if the leader's disk dies with 800 ms of lag, those 800 ms of acknowledged writes are **gone** (that's
 your RPO). This is the default for MySQL replication, Postgres streaming replication, and most read-replica
 setups.
@@ -58,7 +58,7 @@ setups.
 #### Synchronous
 
 Leader waits for the replica to confirm *durable receipt* before acking. RPO = 0, but now every write pays the
-replica round trip, and — the real killer — **a dead or slow synchronous replica blocks all writes**. Fully sync
+replica round trip, and (the real killer) **a dead or slow synchronous replica blocks all writes**. Fully sync
 to all replicas means availability is the *product* of replica availabilities; nobody does this beyond one
 replica.
 
@@ -82,27 +82,27 @@ acknowledged data.
         rows: [
           [
             'Write latency penalty',
-            'Slowest replica’s RTT — 10s of ms cross-AZ, worse cross-region',
+            'Slowest replica’s RTT: 10s of ms cross-AZ, worse cross-region',
             '~0.5–2 ms in-AZ (fastest replica’s ack)',
             'None',
           ],
           [
             'RPO on leader loss',
-            '0 — every ack’d write is on all replicas',
-            '≈0 — every ack’d write is on ≥2 nodes',
+            '0: every ack’d write is on all replicas',
+            '≈0: every ack’d write is on ≥2 nodes',
             'Lag at failure: usually <1 s, unbounded under load',
           ],
           [
             'Replica failure impact',
             'Writes block until replica recovers or is removed',
             'None while ≥1 replica is healthy; degrades to async if all die',
-            'None — replicas are invisible to the write path',
+            'None: replicas are invisible to the write path',
           ],
           [
             'Read staleness on replicas',
             'None (after ack)',
             'Possible on the non-confirming replicas',
-            'Normal — design for it explicitly',
+            'Normal: design for it explicitly',
           ],
           [
             'Typical use',
@@ -121,7 +121,7 @@ acknowledged data.
       md: `
 Async replicas run *behind* the leader. Typical lag is **under 1 second**, but it is fundamentally **unbounded**:
 a bulk import, a long replica transaction, or a saturated NIC can push lag to minutes (Postgres
-\`pg_stat_replication\`, MySQL \`Seconds_Behind_Source\` — alert on these). Lag produces three classic anomalies,
+\`pg_stat_replication\`, MySQL \`Seconds_Behind_Source\`, alert on these). Lag produces three classic anomalies,
 each with a standard fix:
 
 #### 1. Read-your-writes violations
@@ -134,8 +134,8 @@ Users interpret this as data loss. Fixes:
 
 #### 2. Monotonic read violations
 
-Two consecutive reads hit different replicas — the second one *further behind* — and a comment the user just saw
-vanishes. Time appears to flow backwards. Fix: **session affinity** — hash each session to one replica, so reads
+Two consecutive reads hit different replicas (the second one *further behind*) and a comment the user just saw
+vanishes. Time appears to flow backwards. Fix: **session affinity**, which hashes each session to one replica, so reads
 may be stale but never regress.
 
 #### 3. Causal violations
@@ -143,7 +143,7 @@ may be stale but never regress.
 An answer replicates before its question; observers see effects precede causes. Fixes range from causal-consistency
 tokens to simply keeping causally linked data behind one leader.
 
-> Replication lag isn't a bug to eliminate — it's a budget to manage. State which reads tolerate staleness
+> Replication lag isn't a bug to eliminate. It's a budget to manage. State which reads tolerate staleness
 > (feeds: seconds are fine) and which don't (the page right after a write), and route accordingly.
 `,
     },
@@ -154,12 +154,12 @@ tokens to simply keeping causally linked data behind one leader.
 #### Multi-leader: write anywhere, regret everywhere
 
 Multiple leaders accept writes (one per region, typically) and replicate to each other asynchronously. Local
-writes get local latency — and you've signed up for **write conflicts**: two regions update the same row in the
+writes get local latency, and you've signed up for **write conflicts**: two regions update the same row in the
 same 100 ms window, and both think they won. Resolution options are all unpleasant: **last-writer-wins (LWW)**
 silently discards one write using timestamps from clocks that legitimately skew by milliseconds; app-level merge
 callbacks are write-once-debug-forever code. **CRDTs** (conflict-free replicated data types) are the principled
 escape hatch: counters, sets, and lists with mathematically commutative merges, so concurrent updates converge
-deterministically — Riak, Redis Enterprise CRDBs, and collaborative editors (Figma's multiplayer, Automerge) use
+deterministically. Riak, Redis Enterprise CRDBs, and collaborative editors (Figma's multiplayer, Automerge) use
 them, but they only fit data with sensible merge semantics. Avoid multi-leader unless you truly need multi-region
 *writes*; most systems do region-local reads + single write region instead.
 
@@ -168,10 +168,10 @@ them, but they only fit data with sensible merge semantics. Avoid multi-leader u
 Cassandra, Riak, and DynamoDB's internals skip leaders. The client (or coordinator) writes to all **N** replicas,
 waiting for **W** acks; reads query **R** replicas and take the newest version. The guarantee: when
 **R + W > N**, read and write sets overlap in ≥1 replica, so a read sees the latest acknowledged write. Classic
-production setting: **N=3, W=2, R=2** — tolerates one slow/dead replica on both paths with no failover event at
+production setting: **N=3, W=2, R=2**, which tolerates one slow/dead replica on both paths with no failover event at
 all. Supporting machinery: **read repair** (fix stale replicas during reads), **hinted handoff** (a neighbor
 holds writes for a down node and replays them later), and **sloppy quorums** (accept writes on stand-in nodes
-during partitions — favoring availability while weakening the overlap guarantee).
+during partitions, favoring availability while weakening the overlap guarantee).
 `,
     },
     {
@@ -179,7 +179,7 @@ during partitions — favoring availability while weakening the overlap guarante
       title: 'Quorum math and a guarded promotion (pseudocode)',
       language: 'python',
       code: `
-# Part 1 — Dynamo-style quorum: R + W > N guarantees overlap.
+# Part 1: Dynamo-style quorum. R + W > N guarantees overlap.
 N, W, R = 3, 2, 2
 assert R + W > N          # 2+2 > 3: every read set intersects every write set
 
@@ -199,7 +199,7 @@ def read(key, replicas):
             resp.node.put(key, latest.value, latest.version)
     return latest.value
 
-# Part 2 — single-leader failover with fencing (what RDS/Orchestrator
+# Part 2: single-leader failover with fencing (what RDS/Orchestrator
 # style tooling does). The order of operations is the whole game.
 def failover(cluster):
     # 1. DETECT: multiple observers, not one flaky ping.
@@ -231,7 +231,7 @@ def failover(cluster):
       type: 'diagram',
       title: 'Primary + replicas across AZs, with the failover path',
       caption:
-        'Steady state: semi-sync to AZ-b, async to AZ-c, reads load-balanced to replicas. Dashed edges are the failover machinery — health checks, fencing via etcd, and the promotion path.',
+        'Steady state: semi-sync to AZ-b, async to AZ-c, reads load-balanced to replicas. Dashed edges are the failover machinery: health checks, fencing via etcd, and the promotion path.',
       diagram: {
         height: 380,
         nodes: [
@@ -242,7 +242,7 @@ def failover(cluster):
             x: 30,
             y: 105,
             detail:
-              'App traffic: ~25K read QPS, ~3K write QPS. Connects through a proxy that knows which node is primary — clients never hardcode database hosts.',
+              'App traffic: ~25K read QPS, ~3K write QPS. Connects through a proxy that knows which node is primary. Clients never hardcode database hosts.',
           },
           {
             id: 'proxy',
@@ -251,7 +251,7 @@ def failover(cluster):
             x: 250,
             y: 105,
             detail:
-              'PgBouncer/ProxySQL/RDS Proxy. Routes writes to the primary, balances reads across replicas, and is the single point where failover gets repointed — flipping here beats waiting on DNS TTLs.',
+              'PgBouncer/ProxySQL/RDS Proxy. Routes writes to the primary, balances reads across replicas, and is the single point where failover gets repointed. Flipping here beats waiting on DNS TTLs.',
           },
           {
             id: 'primary',
@@ -269,7 +269,7 @@ def failover(cluster):
             x: 790,
             y: 40,
             detail:
-              'Semi-sync standby: confirms WAL receipt before the primary acks, so RPO≈0 for single-node loss. First in line for promotion — usually the most caught-up.',
+              'Semi-sync standby: confirms WAL receipt before the primary acks, so RPO≈0 for single-node loss. First in line for promotion, usually the most caught-up.',
           },
           {
             id: 'replica2',
@@ -313,23 +313,23 @@ def failover(cluster):
     },
     {
       type: 'text',
-      title: 'Failover anatomy — and the split-brain horror story',
+      title: 'Failover anatomy, and the split-brain horror story',
       md: `
-Failover sounds simple — "promote a replica" — but every step hides a way to lose data:
+Failover sounds simple ("promote a replica"), but every step hides a way to lose data:
 
 1. **Detection.** Distinguishing "primary is dead" from "primary is slow / I can't see it" is the FLP problem wearing a pager. Use multiple observers and consecutive-failure thresholds (e.g., 3 fails × 1 s probes). Too aggressive → flapping failovers; too lax → minutes of downtime.
-2. **Fencing — *before* promotion.** The old primary may still be alive and accepting writes from clients that can still reach it. You must make it harmless first: revoke its VIP, kill its connections, bump a **fencing epoch** in etcd so storage/proxies reject its writes, or power it off outright (STONITH — "shoot the other node in the head").
-3. **Promotion.** Pick the most caught-up replica (highest replayed LSN/GTID) to minimize RPO. With async replication, the un-replicated tail is lost — decide *in advance* whether to accept that or block writes instead.
-4. **Repointing.** Flip the proxy/VIP atomically and re-parent the remaining replicas onto the new primary. DNS-based repointing is the slow path — 30–300 s of TTL caching.
+2. **Fencing, *before* promotion.** The old primary may still be alive and accepting writes from clients that can still reach it. You must make it harmless first: revoke its VIP, kill its connections, bump a **fencing epoch** in etcd so storage/proxies reject its writes, or power it off outright (STONITH, "shoot the other node in the head").
+3. **Promotion.** Pick the most caught-up replica (highest replayed LSN/GTID) to minimize RPO. With async replication, the un-replicated tail is lost, so decide *in advance* whether to accept that or block writes instead.
+4. **Repointing.** Flip the proxy/VIP atomically and re-parent the remaining replicas onto the new primary. DNS-based repointing is the slow path: 30–300 s of TTL caching.
 
 #### GitHub, October 21, 2018
 
 A routine maintenance caused **43 seconds** of connectivity loss between GitHub's East Coast data center and the
 rest. Orchestrator dutifully failed over: West Coast MySQL replicas were promoted. But the East Coast primary had
-accepted writes during those seconds that never replicated — and after promotion, *both* sides had unique writes.
+accepted writes during those seconds that never replicated, and after promotion, *both* sides had unique writes.
 The result of 43 seconds of partition: **24+ hours of degraded service** while data was manually reconciled, with
 some writes restored from backups. The lessons are the modern failover canon: fence before promoting, prefer
-strict topologies (don't auto-promote across regions on async links), and rehearse failovers routinely — an
+strict topologies (don't auto-promote across regions on async links), and rehearse failovers routinely. An
 untested failover path is just an outage with extra YAML.
 `,
     },
@@ -361,14 +361,14 @@ untested failover path is just an outage with extra YAML.
     {
       question: 'With async replication and 800 ms of lag, the primary’s disk is destroyed. What happens to the last 800 ms of acknowledged writes?',
       options: [
-        'They are lost — that lag is exactly your RPO',
+        'They are lost: that lag is exactly your RPO',
         'They are recovered from the WAL on the replicas',
         'The clients automatically replay them',
-        'Nothing — acknowledged writes are always durable',
+        'Nothing: acknowledged writes are always durable',
       ],
       answer: 0,
       explanation:
-        'Async means the leader acked writes that existed only on its own disk. Whatever hadn’t reached a replica is gone — the core trade you accept in exchange for zero write-latency penalty.',
+        'Async means the leader acked writes that existed only on its own disk. Whatever hadn’t reached a replica is gone. That is the core trade you accept in exchange for zero write-latency penalty.',
     },
     {
       question: 'A user saves a new profile photo, refreshes, and sees the old one. Which fix is most precise?',
@@ -392,7 +392,7 @@ untested failover path is just an outage with extra YAML.
       ],
       answer: 1,
       explanation:
-        'Any 2 of 3 replicas intersect any other 2 of 3 in at least one node, so some read replica always holds the newest version — version metadata picks it out. No leader or failover event required.',
+        'Any 2 of 3 replicas intersect any other 2 of 3 in at least one node, so some read replica always holds the newest version, and version metadata picks it out. No leader or failover event required.',
     },
     {
       question: 'In the GitHub 2018 incident, what turned a 43-second partition into 24+ hours of degraded service?',
@@ -404,7 +404,7 @@ untested failover path is just an outage with extra YAML.
       ],
       answer: 3,
       explanation:
-        'The old primary had accepted writes that never replicated before a cross-country promotion — both sides then held unique data. Fencing the old leader before promotion is the lesson.',
+        'The old primary had accepted writes that never replicated before a cross-country promotion, so both sides then held unique data. Fencing the old leader before promotion is the lesson.',
     },
     {
       question: 'Why is semi-sync (ANY 1 standby) the common production default over full sync?',
@@ -437,16 +437,16 @@ untested failover path is just an outage with extra YAML.
     },
     {
       question: 'Design the failover controller itself. How do you make sure it never creates two primaries?',
-      hint: 'Structure: multi-observer detection with quorum agreement (don’t trust one prober), fencing before promotion (epoch in a consensus store + connection kill + VIP revoke / STONITH), promote highest-LSN replica, atomic proxy repoint, old primary rejoins only as replica after a rewind (pg_rewind). The controller’s own HA must come from a consensus-backed lease — otherwise you’ve just moved the split-brain.',
+      hint: 'Structure: multi-observer detection with quorum agreement (don’t trust one prober), fencing before promotion (epoch in a consensus store + connection kill + VIP revoke / STONITH), promote highest-LSN replica, atomic proxy repoint, old primary rejoins only as replica after a rewind (pg_rewind). The controller’s own HA must come from a consensus-backed lease. Otherwise you’ve just moved the split-brain.',
       difficulty: 'Senior',
     },
   ],
   commonMistakes: [
     'Saying "we have replicas" as if that equals HA. Without tested, automated failover plus fencing, replicas are just warm disks; your real RTO is however long the 3 a.m. runbook takes.',
     'Promoting a replica without fencing the old primary first. A paused-but-alive leader keeps taking writes and you get the GitHub-2018 scenario: divergent data and a day of reconciliation.',
-    'Reading your own write from an async replica and calling it a bug in the database. It’s a routing decision you didn’t make — pin post-write reads or track LSNs.',
+    'Reading your own write from an async replica and calling it a bug in the database. It’s a routing decision you didn’t make, so pin post-write reads or track LSNs.',
     'Treating replication lag as bounded because it’s usually 200 ms. Under bulk loads it grows without limit; alert on lag and define what happens to reads when it breaches the budget.',
-    'Choosing LWW conflict resolution casually in multi-leader setups. Clock skew of a few ms means LWW silently deletes concurrent writes — fine for a presence flag, catastrophic for a cart.',
+    'Choosing LWW conflict resolution casually in multi-leader setups. Clock skew of a few ms means LWW silently deletes concurrent writes: fine for a presence flag, catastrophic for a cart.',
   ],
   cloudMappings: [
     { concept: 'Managed HA failover (single region)', aws: 'RDS Multi-AZ (semi-sync standby, ~60 s failover)', gcp: 'Cloud SQL HA (regional sync disk)', azure: 'Azure SQL / Flexible Server zone-redundant HA' },

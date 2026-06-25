@@ -15,7 +15,7 @@ const ZONES: ZoneInfo[] = [
   {
     label: 'Strong consistency (CP)',
     systems: 'Spanner, etcd, ZooKeeper, HBase',
-    reads: 'Always return the latest committed write — linearizable.',
+    reads: 'Always return the latest committed write. Linearizable.',
     writes: 'Acknowledged only after a quorum agrees; +5–100 ms latency.',
     partition: 'Minority side refuses requests. Correct, but partially unavailable.',
     useWhen: 'Money movement, inventory counts, leader election, configuration.',
@@ -34,7 +34,7 @@ const ZONES: ZoneInfo[] = [
     reads: 'May be stale for ms–seconds; served locally at ~1 ms.',
     writes: 'Acknowledged by one node, replicated asynchronously.',
     partition: 'Every side keeps serving; conflicts reconciled later (LWW, CRDTs).',
-    useWhen: 'Feeds, likes, view counters, presence, caches — where stale ≠ wrong.',
+    useWhen: 'Feeds, likes, view counters, presence, caches. Where stale ≠ wrong.',
   },
 ]
 
@@ -51,7 +51,7 @@ export function TradeoffVisualizer() {
         </h3>
       </div>
       <p className="mb-6 text-xs text-surface-400">
-        Drag the slider. During a network partition you can't have both — see what each position costs you.
+        Drag the slider. During a network partition you can't have both. See what each position costs you.
       </p>
 
       <div className="relative mb-2 h-3 rounded-full bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500 opacity-80" />

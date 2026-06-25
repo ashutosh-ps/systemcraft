@@ -13,17 +13,17 @@ const designGoogleSearch: Module = {
   sections: [
     {
       type: 'text',
-      title: 'Step 1: Requirements — three systems, one product',
+      title: 'Step 1: Requirements. Three systems, one product',
       md: `
 "Design Google Search" is really three loosely-coupled systems, each at absurd scale:
 
-1. **Crawl**: continuously discover and fetch the web — hundreds of billions of candidate URLs, refetched on
+1. **Crawl**: continuously discover and fetch the web. Hundreds of billions of candidate URLs, refetched on
    schedules that match how often pages change.
 2. **Index**: turn fetched pages into an **inverted index** (term → list of documents) that fits the serving
    fleet's RAM and SSDs.
 3. **Serve**: answer a query against that index in **well under 300 ms end-to-end**, at **100K+ QPS**.
 
-**Explicitly out of scope** — say it before the interviewer asks: ads (a separate auction system), personalization
+**Explicitly out of scope**. Say it before the interviewer asks: ads (a separate auction system), personalization
 and query history, image/video/news verticals, and the fine detail of ranking ML. You'll sketch ranking in one
 section, not design it.
 
@@ -31,12 +31,12 @@ section, not design it.
 
 - **Freshness is tiered, not uniform**: news sites get recrawled in minutes, a 2009 blog post monthly. A single
   "crawl everything every day" policy is neither possible nor useful.
-- **The index is rebuilt/updated continuously but is never transactional** — eventual consistency between web
+- **The index is rebuilt/updated continuously but is never transactional**. Eventual consistency between web
   reality and index contents is inherent; nobody expects a page edit to be searchable in the same second.
 - **Serving must degrade gracefully**: returning very good results from 98% of shards in 250 ms beats perfect
   results in 2 s. Search is the canonical "latency over completeness" system.
 - **Read-only serving**: queries never write to the index. This one property unlocks aggressive replication and
-  caching — every replica is equally authoritative.
+  caching. Every replica is equally authoritative.
 
 > Framing tip: crawl is a throughput problem, indexing is a batch-compute problem, serving is a latency problem.
 > Naming the three regimes up front shows you see the whole machine.
@@ -79,25 +79,25 @@ leaf_lookups_per_sec = avg_qps * shards / 1   # every query touches every shard 
     },
     {
       type: 'text',
-      title: 'Step 3: Crawler design — politeness is the bottleneck',
+      title: 'Step 3: Crawler design, where politeness is the bottleneck',
       md: `
-A crawler is conceptually a loop — take URL, fetch, parse, extract links, repeat — but at web scale every step has
+A crawler is conceptually a loop. Take URL, fetch, parse, extract links, repeat. But at web scale every step has
 a hard sub-problem:
 
 - **URL frontier (the heart).** A priority queue of billions of URLs. Two-level design: a **prioritizer** scores
   URLs (PageRank-ish importance, observed change frequency, sitemap hints), and **per-host politeness queues**
-  ensure you never hammer one server — industry norm is **~1 request/second/host** unless the site signals
+  ensure you never hammer one server. Industry norm is **~1 request/second/host** unless the site signals
   otherwise. Politeness, not bandwidth, is the real throughput cap: 19K fetches/sec means **tens of thousands of
   hosts in flight simultaneously**, so the frontier must be sharded by host.
 - **robots.txt** is fetched and cached per host (~24 h TTL) and checked before *every* fetch. Getting this wrong
   gets your crawler IP-banned at scale.
-- **Fetchers** are stateless async workers — thousands of connections each, DNS aggressively cached (DNS resolution
+- **Fetchers** are stateless async workers. Thousands of connections each, DNS aggressively cached (DNS resolution
   is a classic hidden bottleneck at 19K lookups/sec).
 - **Parsing + extraction** pulls text, links, and metadata; discovered links are normalized (canonical URL rules)
   and fed back to the frontier.
 - **Deduplication.** ~30% of the web is near-duplicate content (mirrors, tracking-param URLs, scraped copies).
   Exact dupes are caught by content checksum; near-dupes by **SimHash**: a 64-bit fingerprint where similar
-  documents differ in ≤3 bits — Google's published approach (Manku et al., 2007). Skipping dedup means wasting a
+  documents differ in ≤3 bits. Google's published approach (Manku et al., 2007). Skipping dedup means wasting a
   third of your index on copies.
 - **Refresh scheduling.** Track per-page change history; pages that change often get short revisit intervals
   (minutes for news homepages), static pages back off exponentially toward monthly. This converts a "crawl
@@ -112,14 +112,14 @@ a hard sub-problem:
       diagram: {
         height: 400,
         nodes: [
-          { id: 'sched', label: 'Refresh Sched', kind: 'service', x: 20, y: 20, detail: 'Tracks per-page change history and re-enqueues URLs on adaptive intervals — minutes for news homepages, ~monthly for static pages. Converts infinite crawl demand into a prioritized budget.' },
+          { id: 'sched', label: 'Refresh Sched', kind: 'service', x: 20, y: 20, detail: 'Tracks per-page change history and re-enqueues URLs on adaptive intervals. Minutes for news homepages, ~monthly for static pages. Converts infinite crawl demand into a prioritized budget.' },
           { id: 'frontier', label: 'URL Frontier', kind: 'queue', x: 20, y: 170, detail: 'Billions of URLs in a two-level structure: priority scoring (importance × change frequency) on top, per-host politeness queues below (~1 req/s/host). Sharded by host hash across hundreds of nodes.' },
           { id: 'web', label: 'The Web', kind: 'external', x: 205, y: 20, detail: 'Hundreds of billions of reachable URLs across ~1B hosts. Hostile terrain: spider traps, infinite calendars, 30% near-duplicate content, and servers that ban impolite crawlers.' },
-          { id: 'fetchers', label: 'Fetchers', kind: 'server', x: 205, y: 170, detail: 'Stateless async workers sustaining ~19K fetches/sec fleet-wide (~2 Gbps of HTML). Check cached robots.txt before every fetch; DNS responses cached aggressively — resolution is a hidden bottleneck at this rate.' },
-          { id: 'parser', label: 'Parser', kind: 'service', x: 400, y: 60, detail: 'Extracts text, title, language, and outlinks; normalizes URLs to canonical form (strips tracking params, resolves redirects). Discovered links — billions/day — flow back to the frontier.' },
-          { id: 'dedup', label: 'Dedup SimHash', kind: 'service', x: 400, y: 280, detail: 'Checksum kills exact copies; SimHash (64-bit fingerprint, Hamming distance ≤ 3 = near-duplicate) kills mirrors and scraped copies — ~30% of fetched content. Saves a third of the index.' },
+          { id: 'fetchers', label: 'Fetchers', kind: 'server', x: 205, y: 170, detail: 'Stateless async workers sustaining ~19K fetches/sec fleet-wide (~2 Gbps of HTML). Check cached robots.txt before every fetch; DNS responses cached aggressively. Resolution is a hidden bottleneck at this rate.' },
+          { id: 'parser', label: 'Parser', kind: 'service', x: 400, y: 60, detail: 'Extracts text, title, language, and outlinks; normalizes URLs to canonical form (strips tracking params, resolves redirects). Discovered links, billions per day, flow back to the frontier.' },
+          { id: 'dedup', label: 'Dedup SimHash', kind: 'service', x: 400, y: 280, detail: 'Checksum kills exact copies; SimHash (64-bit fingerprint, Hamming distance ≤ 3 = near-duplicate) kills mirrors and scraped copies (~30% of fetched content), saving a third of the index.' },
           { id: 'docstore', label: 'Doc Store', kind: 'storage', x: 595, y: 280, detail: 'Compressed repository of fetched pages (~5 PB of raw HTML for 50B docs) in a Bigtable/Colossus-style store, keyed by doc ID, versioned by fetch time. The input for every index rebuild.' },
-          { id: 'indexer', label: 'Batch Indexer', kind: 'service', x: 595, y: 60, detail: 'MapReduce-style jobs: map emits (term, docID, positions), shuffle groups by term, reduce writes compressed posting lists. Modern systems (Caffeine/Percolator) update incrementally — minutes, not weekly rebuilds.' },
+          { id: 'indexer', label: 'Batch Indexer', kind: 'service', x: 595, y: 60, detail: 'MapReduce-style jobs: map emits (term, docID, positions), shuffle groups by term, reduce writes compressed posting lists. Modern systems (Caffeine/Percolator) update incrementally in minutes, not weekly rebuilds.' },
           { id: 'shards', label: 'Index Shards', kind: 'db', x: 800, y: 60, detail: 'Immutable document-sharded index files: each of ~1,000 leaf shards owns the full mini-index for its ~50M docs, replicated ~30× for QPS and tail latency. Shipped to serving like a deploy artifact, with instant rollback.' },
         ],
         edges: [
@@ -137,11 +137,11 @@ a hard sub-problem:
     },
     {
       type: 'text',
-      title: 'Step 4: Indexing — building and sharding the inverted index',
+      title: 'Step 4: Indexing. Building and sharding the inverted index',
       md: `
 The **inverted index** maps each term to a **posting list**: the documents containing it, with positions and
 per-document scoring features, delta-encoded and compressed (a posting costs a few bytes, not a few dozen). The
-classic build is a MapReduce-style batch job — *map* over documents emitting \`(term, docID, positions)\`, *shuffle*
+classic build is a MapReduce-style batch job. *map* over documents emitting \`(term, docID, positions)\`, *shuffle*
 groups by term, *reduce* writes compressed posting lists. Google ran exactly this until 2010, when **Caffeine**
 (built on Percolator) replaced weekly batch rebuilds with incremental per-document updates, cutting indexing
 latency from days to minutes. In an interview: design the batch version, then mention the incremental evolution.
@@ -149,19 +149,18 @@ latency from days to minutes. In an interview: design the batch version, then me
 A 20–100 PB index doesn't fit on one machine, so it must be partitioned. Two options:
 
 #### Shard by term
-Each shard owns a slice of the vocabulary ("aardvark–apple" on shard 1). A single-term query touches one shard —
-seductive. But a multi-term query like \`"distributed systems"\` needs posting lists from different shards
+Each shard owns a slice of the vocabulary ("aardvark–apple" on shard 1). A single-term query touches one shard. Seductive. But a multi-term query like \`"distributed systems"\` needs posting lists from different shards
 *intersected*, which means shipping a posting list with **hundreds of millions of entries across the network** per
 query. Hot terms ("news", "weather") create permanently hot shards. Adding a document touches every shard whose
 terms it contains.
 
 #### Shard by document (what Google does)
 Each shard owns a complete mini-index over its subset of documents (~50M docs/shard). Every query fans out to all
-shards, but each shard does its term intersection **locally** — only its top-k results (doc IDs + scores, a few KB)
+shards, but each shard does its term intersection **locally**. Only its top-k results (doc IDs + scores, a few KB)
 cross the network. Load balances naturally because documents are assigned randomly; a new document touches exactly
 one shard; a dead shard means a slightly smaller web, not missing terms.
 
-The trade is total fan-out work on every query — which Google happily pays, because intra-shard work parallelizes
+The trade is total fan-out work on every query. Which Google happily pays, because intra-shard work parallelizes
 perfectly and the merge step is cheap.
 `,
     },
@@ -172,9 +171,9 @@ perfectly and the merge step is cheap.
         columns: ['Criterion', 'Shard by document (Google)', 'Shard by term'],
         rows: [
           ['Query fan-out', 'Every query → every shard group (scatter-gather)', 'Only shards owning the query terms'],
-          ['Multi-term AND/phrase', 'Intersected locally inside each shard — cheap', 'Posting lists (potentially 100M+ entries) shipped across the network to intersect'],
+          ['Multi-term AND/phrase', 'Intersected locally inside each shard. Cheap', 'Posting lists (potentially 100M+ entries) shipped across the network to intersect'],
           ['Network per query', 'Top-k per shard: a few KB', 'Full posting lists: MBs-GBs for common terms'],
-          ['Load balance', 'Natural — docs assigned randomly', '"the"/"news" shards run hot forever'],
+          ['Load balance', 'Natural. Docs assigned randomly', '"the"/"news" shards run hot forever'],
           ['Document updates', 'Touch exactly 1 shard', 'Touch every shard containing any of the doc’s terms'],
           ['Failure blast radius', 'Lose 1/N of the web; results slightly degrade', 'Lose entire terms; queries containing them break'],
           ['Best for', 'Web search: short queries, intersections dominate, results need global ranking', 'Rare: single-term lookups over stable corpora'],
@@ -185,13 +184,13 @@ perfectly and the merge step is cheap.
     },
     {
       type: 'text',
-      title: 'Step 5: Serving — scatter-gather in 300 ms',
+      title: 'Step 5: Serving. Scatter-gather in 300 ms',
       md: `
 The serving path is a tree, and the latency budget is brutal: ~300 ms end-to-end leaves the backend roughly
 **100–150 ms** after network and rendering.
 
 1. **Query frontend**: spell-correct, expand synonyms, rewrite (\`how do i...\` → terms), and check the **result
-   cache** first. Query frequency is extremely Zipfian — **30–60% of queries are repeats** within hours — so a
+   cache** first. Query frequency is extremely Zipfian. **30–60% of queries are repeats** within hours. So a
    cache keyed on normalized query serves a third to a half of traffic in ~1 ms, never touching the index. TTL of
    minutes; invalidate on index swaps. (The flip side: **~15% of daily queries have never been seen before**, so
    the cache can never save you from having a fast backend.)
@@ -200,37 +199,36 @@ The serving path is a tree, and the latency budget is brutal: ~300 ms end-to-end
 3. **Leaf shards**: each walks its posting lists, intersects terms, scores candidates, and returns its **top-k**
    (say 10–50 doc IDs + scores). Two tricks keep leaves fast:
    - **Impact-ordered postings + early termination**: posting lists are sorted so the highest-quality documents
-     come first; once the top-k is stable, stop scanning — you rarely read a long posting list to the end.
+     come first; once the top-k is stable, stop scanning. You rarely read a long posting list to the end.
    - **Tiered indexes**: a small tier-1 index of the best few billion documents answers most queries; tier-2 is
      consulted only when tier-1 returns too few results.
-4. **Merge + tail-taming**: the root merges ~1,000 sorted top-k lists (cheap) — but p99 latency is set by the
+4. **Merge + tail-taming**: the root merges ~1,000 sorted top-k lists (cheap). But p99 latency is set by the
    *slowest* shard. Standard fixes: **hedged requests** (send a backup request to another replica after ~p95 wait)
    and returning at, say, 98% shard coverage rather than waiting for stragglers.
 
-> The deep pattern: scatter-gather turns one 100 ms problem into a thousand 10 ms problems plus a merge — and then
+> The deep pattern: scatter-gather turns one 100 ms problem into a thousand 10 ms problems plus a merge. And then
 > all your engineering goes into the tail.
 `,
     },
     {
       type: 'text',
-      title: 'Step 6: Ranking in one section — enough to be dangerous',
+      title: 'Step 6: Ranking in one section. Enough to be dangerous',
       md: `
-Keep ranking brief in a systems interview — name the layers, show where they run, and move on:
+Keep ranking brief in a systems interview. Name the layers, show where they run, and move on:
 
-- **Stage 1 — cheap retrieval scoring (in the leaf, microseconds/doc).** Classic lexical relevance:
-  **BM25/TF-IDF**-family scoring — terms matching in the title beat terms in the footer, rare terms count more than
-  common ones — over the candidates surfaced by posting-list traversal.
-- **Stage 2 — link-based authority (precomputed offline).** **PageRank**: a page is important if important pages
+- **Stage 1. Cheap retrieval scoring (in the leaf, microseconds/doc).** Classic lexical relevance:
+  **BM25/TF-IDF**-family scoring over the candidates surfaced by posting-list traversal. Terms matching in the title
+  beat terms in the footer, and rare terms count more than common ones.
+- **Stage 2. Link-based authority (precomputed offline).** **PageRank**: a page is important if important pages
   link to it. Computed periodically over the ~trillion-edge link graph and stored as a per-document prior; at query
   time it's just a number multiplied in, costing nothing.
-- **Stage 3 — full re-ranking (in the mixer, on ~1,000 survivors).** Hundreds of signals — freshness, language,
-  mobile-friendliness, click feedback, spam scores — and, since ~2015-2019, neural models (RankBrain, BERT-based
-  rerankers) that actually understand query semantics. Expensive per document, which is exactly why it only runs on
-  the merged top candidates, never on millions of matches.
+- **Stage 3. Full re-ranking (in the mixer, on ~1,000 survivors).** Hundreds of signals: freshness, language,
+  mobile-friendliness, click feedback, spam scores, and (since ~2015-2019) neural models (RankBrain, BERT-based
+  rerankers) that actually understand query semantics. This is expensive per document, which is exactly why it only
+  runs on the merged top candidates, never on millions of matches.
 
 The architectural takeaway matters more than the ML: **ranking is a funnel**. Each stage is ~100× more expensive
-per document and runs on ~100× fewer documents. Cheap-and-broad in the leaves, expensive-and-narrow at the root —
-the same funnel shape appears in ads, recommendations, and every retrieval system you'll ever design.
+per document and runs on ~100× fewer documents. Cheap-and-broad in the leaves, expensive-and-narrow at the root. The same funnel shape appears in ads, recommendations, and every retrieval system you'll ever design.
 `,
     },
     {
@@ -240,9 +238,9 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
         { metric: 'Index size', value: '~100 PB (100M GB)', context: 'Google’s public figure including doc store and signals; the serving-critical inverted index is tens of PB compressed.' },
         { metric: 'Pages known vs indexed', value: '400B+ seen, ~50-100B served', context: 'Dedup (~30% of the web is near-duplicate) and quality filtering shrink the corpus before it costs serving RAM.' },
         { metric: 'Query volume', value: '~8.5B/day ≈ 100K QPS', context: 'Average; peaks ~2×. Each query fans out to ~1,000 leaf shard groups.' },
-        { metric: 'End-to-end latency', value: 'p99 < 300 ms', context: 'Backend budget ~100-150 ms; the p99 is set by the slowest of 1,000 shards — hence hedged requests and partial coverage.' },
+        { metric: 'End-to-end latency', value: 'p99 < 300 ms', context: 'Backend budget ~100-150 ms; the p99 is set by the slowest of 1,000 shards. Hence hedged requests and partial coverage.' },
         { metric: 'Never-seen queries', value: '~15% per day', context: 'Google’s long-standing stat. Result caching helps (30-60% repeats) but can never replace a fast index.' },
-        { metric: 'Politeness limit', value: '~1 req/s/host', context: 'The real crawl throughput cap — 19K fetches/sec requires tens of thousands of hosts in flight, not faster fetching.' },
+        { metric: 'Politeness limit', value: '~1 req/s/host', context: 'The real crawl throughput cap. 19K fetches/sec requires tens of thousands of hosts in flight, not faster fetching.' },
         { metric: 'SimHash near-dup threshold', value: '≤ 3 of 64 bits differ', context: 'Manku et al. (Google, 2007): billions of documents deduped via fingerprint Hamming distance.' },
       ],
     },
@@ -252,14 +250,14 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
       scenario: {
         beforeTitle: 'Single machine holding the whole inverted index',
         beforeDescription:
-          'A 20+ PB index cannot even fit — but scale it down to a 2 TB index on one beefy node: every query walks long posting lists serially, one hot term saturates the CPU, p99 swings wildly, and any restart means total search downtime while the index reloads.',
+          'A 20+ PB index cannot even fit. But scale it down to a 2 TB index on one beefy node: every query walks long posting lists serially, one hot term saturates the CPU, p99 swings wildly, and any restart means total search downtime while the index reloads.',
         afterTitle: '~1,000 doc-shards × ~30 replicas, scatter-gather root',
         afterDescription:
           'Each leaf intersects terms over its ~50M docs locally and returns top-k; the root merges and re-ranks. Capacity scales with replicas, latency with shard count; a dead shard degrades coverage by 0.1% instead of taking search down.',
         metrics: [
           { label: 'Index capacity ceiling', before: '~2 TB (one machine’s RAM+SSD)', after: 'Tens of PB across the fleet', improved: true },
           { label: 'Query p99', before: '2-10 s on long posting lists', after: '< 300 ms end-to-end', improved: true },
-          { label: 'Throughput path', before: 'Vertical only — bigger box', after: 'Add replicas per shard group', improved: true },
+          { label: 'Throughput path', before: 'Vertical only. Bigger box', after: 'Add replicas per shard group', improved: true },
           { label: 'Single shard/node failure', before: '100% search outage', after: '~0.1% coverage loss, results barely change', improved: true },
         ],
       },
@@ -272,7 +270,7 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
         'Document sharding means each query touches only one shard',
         'Term sharding cannot be implemented on commodity hardware',
         'Document sharding makes the index smaller overall',
-        'Multi-term intersections happen locally inside each shard, so only a few KB of top-k results cross the network — versus shipping 100M-entry posting lists between term shards',
+        'Multi-term intersections happen locally inside each shard, so only a few KB of top-k results cross the network. Versus shipping 100M-entry posting lists between term shards',
       ],
       answer: 3,
       explanation:
@@ -282,13 +280,13 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
       question: 'What actually limits a web crawler’s throughput at scale?',
       options: [
         'Datacenter bandwidth for fetching HTML',
-        'Per-host politeness (~1 req/s/host) — sustaining 19K fetches/sec requires tens of thousands of hosts in flight concurrently',
+        'Per-host politeness (~1 req/s/host). Sustaining 19K fetches/sec requires tens of thousands of hosts in flight concurrently',
         'CPU cost of parsing HTML',
         'Disk space for storing fetched pages',
       ],
       answer: 1,
       explanation:
-        '19K fetches/sec is only ~2 Gbps — trivial bandwidth. The constraint is that you may only take ~1 page/sec from any single host, so the frontier must keep enormous host-level parallelism, which is why it is sharded by host with per-host queues.',
+        '19K fetches/sec is only ~2 Gbps. Trivial bandwidth. The constraint is that you may only take ~1 page/sec from any single host, so the frontier must keep enormous host-level parallelism, which is why it is sharded by host with per-host queues.',
     },
     {
       question: 'What does SimHash provide that a content checksum (MD5/SHA) does not?',
@@ -307,7 +305,7 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
       options: [
         'Caches cannot store ranked result lists',
         'Cache invalidation on index updates is impossible',
-        '~15% of each day’s queries have never been seen before, and the long tail of rare queries always misses — the uncached path must still meet the latency SLO',
+        '~15% of each day’s queries have never been seen before, and the long tail of rare queries always misses. The uncached path must still meet the latency SLO',
         'Result caching violates user privacy',
       ],
       answer: 2,
@@ -324,7 +322,7 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
       ],
       answer: 3,
       explanation:
-        'Fan out to N shards and your latency is the max of N samples — tail amplification. Hedging (resend to another replica after ~p95 wait) and partial-coverage returns are the classic fixes, trading tiny result completeness for bounded latency.',
+        'Fan out to N shards and your latency is the max of N samples. Tail amplification. Hedging (resend to another replica after ~p95 wait) and partial-coverage returns are the classic fixes, trading tiny result completeness for bounded latency.',
     },
   ],
   interviewQuestions: [
@@ -335,7 +333,7 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
     },
     {
       question: 'How does your design change if results must reflect page edits within ~1 minute (news/freshness) instead of daily batch rebuilds?',
-      hint: 'Batch MapReduce rebuilds are out — discuss incremental indexing (Caffeine/Percolator-style per-document updates), a small fresh in-memory delta index queried alongside the main index with results merged, accelerated recrawl tiers driven by change-frequency models, and result-cache TTLs/invalidations tightening.',
+      hint: 'Batch MapReduce rebuilds are out. Discuss incremental indexing (Caffeine/Percolator-style per-document updates), a small fresh in-memory delta index queried alongside the main index with results merged, accelerated recrawl tiers driven by change-frequency models, and result-cache TTLs/invalidations tightening.',
       difficulty: 'Senior',
     },
     {
@@ -345,16 +343,16 @@ the same funnel shape appears in ads, recommendations, and every retrieval syste
     },
     {
       question: 'A leaf shard group starts answering with p99 of 800 ms instead of 30 ms. What is the blast radius on overall search, and how does the system self-protect?',
-      hint: 'Naively, every query waits on the slowest shard — one bad group poisons the global p99. Defenses: hedged/backup requests after ~p95, per-shard timeouts with partial coverage (return at 98-99% of shards), load-aware replica selection pulling traffic from the sick replicas, and the merge layer flagging degraded coverage for monitoring.',
+      hint: 'Naively, every query waits on the slowest shard. One bad group poisons the global p99. Defenses: hedged/backup requests after ~p95, per-shard timeouts with partial coverage (return at 98-99% of shards), load-aware replica selection pulling traffic from the sick replicas, and the merge layer flagging degraded coverage for monitoring.',
       difficulty: 'Senior',
     },
   ],
   commonMistakes: [
-    'Designing the crawler around bandwidth instead of politeness. The hard part is sustaining tens of thousands of hosts in flight at ~1 req/s each with per-host queues and robots.txt caching — not downloading bytes faster.',
-    'Choosing term sharding because "a query only needs its terms". Multi-term intersections then ship 100M-entry posting lists across the network and hot terms melt their shards — walk through one phrase query and the design falls apart.',
-    'Skipping deduplication. ~30% of the web is near-duplicate; without SimHash-style fingerprinting you pay to crawl, store, index, and serve the same content three times — and result pages fill with mirrors.',
+    'Designing the crawler around bandwidth instead of politeness. The hard part is sustaining tens of thousands of hosts in flight at ~1 req/s each with per-host queues and robots.txt caching, not downloading bytes faster.',
+    'Choosing term sharding because "a query only needs its terms". Multi-term intersections then ship 100M-entry posting lists across the network and hot terms melt their shards. Walk through one phrase query and the design falls apart.',
+    'Skipping deduplication. ~30% of the web is near-duplicate; without SimHash-style fingerprinting you pay to crawl, store, index, and serve the same content three times, and result pages fill with mirrors.',
     'Treating the index like a transactional database. It is an immutable, periodically-swapped (or incrementally-updated) artifact; queries are read-only. Proposing row-level updates with locks signals you haven’t built a search system.',
-    'Ignoring tail latency in scatter-gather. Quoting average leaf latency is meaningless when every query waits on the max of 1,000 samples — interviewers specifically probe for hedged requests and partial-coverage returns.',
+    'Ignoring tail latency in scatter-gather. Quoting average leaf latency is meaningless when every query waits on the max of 1,000 samples. Interviewers specifically probe for hedged requests and partial-coverage returns.',
   ],
   cloudMappings: [
     { concept: 'Crawl frontier / work queues', aws: 'SQS + DynamoDB (per-host state)', gcp: 'Pub/Sub + Cloud Tasks', azure: 'Service Bus + Storage Queues' },

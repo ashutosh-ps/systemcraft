@@ -6,7 +6,7 @@ export function NotFoundPage() {
       <p className="font-mono text-6xl font-bold text-surface-300 dark:text-surface-700">404</p>
       <p className="mt-4 text-lg font-semibold text-surface-900 dark:text-surface-100">Page not found</p>
       <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-        That route doesn't resolve — maybe it was sharded somewhere else.
+        That route doesn't resolve. Maybe it was sharded somewhere else.
       </p>
       <Link
         to="/"

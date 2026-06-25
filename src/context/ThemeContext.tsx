@@ -15,7 +15,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem('sc-theme', dark ? 'dark' : 'light')
     } catch {
-      // private mode — theme just won't persist
+      // private mode. Theme just won't persist
     }
   }, [dark])
 

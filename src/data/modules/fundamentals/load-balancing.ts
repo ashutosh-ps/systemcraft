@@ -19,12 +19,12 @@ The moment you have a second app server you have a routing problem: clients know
 many machines. The **load balancer (LB)** is the component that owns the public address and spreads requests across a
 backend pool. It is doing three jobs at once:
 
-- **Distribution** — pick a backend per request (or per connection) so no node melts while others idle.
-- **Health** — probe backends every few seconds and stop sending traffic to dead ones *before* users notice.
-- **Indirection** — backends can be added, drained, patched, and replaced without clients ever knowing. This is what makes autoscaling and zero-downtime deploys possible at all.
+- **Distribution.** Pick a backend per request (or per connection) so no node melts while others idle.
+- **Health.** Probe backends every few seconds and stop sending traffic to dead ones *before* users notice.
+- **Indirection.** Backends can be added, drained, patched, and replaced without clients ever knowing. This is what makes autoscaling and zero-downtime deploys possible at all.
 
 The economics are absurdly good. An AWS Application Load Balancer costs about **$16/month base (~$0.0225/hour) plus
-$0.008 per LCU-hour** — typically **$20–50/month** for a mid-size service — and removes the single point of failure
+$0.008 per LCU-hour**, typically **$20–50/month** for a mid-size service, and removes the single point of failure
 that one app server represents. A Network Load Balancer handles **millions of requests per second** while adding on
 the order of **100 µs** of latency; an ALB adds roughly **1–10 ms** because it terminates TLS and parses HTTP.
 
@@ -40,8 +40,8 @@ The single most important classification is which OSI layer the LB understands.
 
 #### Layer 4 (transport)
 
-An L4 balancer sees only **IP addresses and TCP/UDP ports**. It forwards packets — often without terminating the
-connection — using NAT or direct server return. Because it never parses the payload, it is brutally fast: AWS NLB and
+An L4 balancer sees only **IP addresses and TCP/UDP ports**. It forwards packets, often without terminating the
+connection, using NAT or direct server return. Because it never parses the payload, it is brutally fast: AWS NLB and
 HAProxy in TCP mode add **~100 µs or less** and a single HAProxy box can hold **~2 million concurrent connections**.
 The cost: it cannot route by URL, host header, or cookie, because it literally cannot see them. TLS passes through
 encrypted.
@@ -56,7 +56,7 @@ connection to a backend. Now it can do the useful stuff:
 - Cookie-based sticky sessions, header rewrites, gRPC and WebSocket awareness.
 - Request-level retries and per-route timeouts.
 
-The price is **1–10 ms added latency**, higher CPU cost (TLS handshakes are expensive — ~1 ms of CPU per full
+The price is **1–10 ms added latency**, higher CPU cost (TLS handshakes are expensive, ~1 ms of CPU per full
 handshake even with modern ciphers), and the LB becoming a more complex failure domain.
 
 Real systems commonly stack them: **NLB (L4) → Envoy/ALB (L7) → services**. The L4 tier gives you a stable, cheap,
@@ -78,7 +78,7 @@ fast entry point; the L7 tier gives you routing intelligence.
           ['Typical products', 'AWS NLB, HAProxy TCP, IPVS, Maglev', 'AWS ALB, nginx, Envoy, HAProxy HTTP'],
         ],
         verdict:
-          'Default to L7 for web/API traffic — the routing features pay for the milliseconds. Use L4 when you need raw TCP/UDP, extreme throughput, or sub-millisecond overhead (databases, game servers, the entry tier in front of an L7 fleet).',
+          'Default to L7 for web/API traffic: the routing features pay for the milliseconds. Use L4 when you need raw TCP/UDP, extreme throughput, or sub-millisecond overhead (databases, game servers, the entry tier in front of an L7 fleet).',
       },
     },
     {
@@ -94,14 +94,14 @@ counts the same as a 5 ms health ping, so a backend can be drowning while still 
 #### Least-connections
 
 Send the next request to the backend with the fewest in-flight connections. This self-corrects for uneven request
-cost — slow backends accumulate connections and automatically receive less traffic. It is the right default for
+cost: slow backends accumulate connections and automatically receive less traffic. It is the right default for
 APIs with variable latency. The popular refinement is **power of two choices**: pick two backends at random, send to
-the less loaded one — nearly as good as global least-connections with none of the coordination cost (this is what
+the less loaded one. That is nearly as good as global least-connections with none of the coordination cost (this is what
 Envoy and NGINX Plus implement).
 
 #### IP hash
 
-\`hash(client_ip) % N\` pins each client to one backend. Crude session affinity with no cookies — but adding or
+\`hash(client_ip) % N\` pins each client to one backend. Crude session affinity with no cookies, but adding or
 removing a single backend reshuffles **almost every client**, and NAT'd offices (thousands of users behind one IP)
 become hot spots.
 
@@ -110,7 +110,7 @@ become hot spots.
 Place backends on a hash ring; a key (user ID, cache key) maps to the next node clockwise. When a node joins or
 leaves, only **~K/N of keys move** (K keys, N nodes) instead of nearly all of them. With **100–200 virtual nodes**
 per physical node the load spread evens to within a few percent. This is how cache tiers, Cassandra, and DynamoDB
-route — and a perennial interview favorite.
+route, and a perennial interview favorite.
 `,
     },
     {
@@ -164,11 +164,11 @@ class ConsistentHashRing:
       diagram: {
         height: 420,
         nodes: [
-          { id: 'client', label: 'Client', kind: 'client', x: 20, y: 210, detail: 'Resolves api.example.com once per TTL, then connects straight to the LB IP. A warm client skips DNS entirely — resolution only costs 20–120 ms on a cold cache.' },
+          { id: 'client', label: 'Client', kind: 'client', x: 20, y: 210, detail: 'Resolves api.example.com once per TTL, then connects straight to the LB IP. A warm client skips DNS entirely; resolution only costs 20–120 ms on a cold cache.' },
           { id: 'resolver', label: 'DNS Resolver', kind: 'external', x: 220, y: 60, detail: 'The ISP or public resolver (1.1.1.1, 8.8.8.8). Caches answers for the record TTL. Anycast routing means the "one" IP is actually hundreds of sites worldwide, answering in ~10–20 ms.' },
-          { id: 'geodns', label: 'Route 53 GeoDNS', kind: 'external', x: 440, y: 60, detail: 'Authoritative nameserver. Returns different LB IPs by client geography and health — latency-based routing typically saves 50–150 ms for cross-continent users. Route 53 offers a 100% availability SLA at $0.40 per million queries.' },
+          { id: 'geodns', label: 'Route 53 GeoDNS', kind: 'external', x: 440, y: 60, detail: 'Authoritative nameserver. Returns different LB IPs by client geography and health; latency-based routing typically saves 50–150 ms for cross-continent users. Route 53 offers a 100% availability SLA at $0.40 per million queries.' },
           { id: 'lb-a', label: 'ALB (active)', kind: 'lb', x: 440, y: 210, detail: 'L7 balancer: terminates TLS, routes by path/host, runs least-connections. Adds ~1–10 ms. Internally AWS runs a fleet of LB nodes per AZ behind the DNS name and scales them with your traffic.' },
-          { id: 'lb-b', label: 'ALB (standby)', kind: 'lb', x: 440, y: 330, detail: 'Failover pair in another AZ. With managed ELB this is implicit — nodes in every enabled AZ share the work. Self-hosted HAProxy pairs use a floating VIP via keepalived/VRRP; failover takes ~1–3 seconds.' },
+          { id: 'lb-b', label: 'ALB (standby)', kind: 'lb', x: 440, y: 330, detail: 'Failover pair in another AZ. With managed ELB this is implicit: nodes in every enabled AZ share the work. Self-hosted HAProxy pairs use a floating VIP via keepalived/VRRP; failover takes ~1–3 seconds.' },
           { id: 'app1', label: 'App Server 1', kind: 'server', x: 700, y: 100, detail: 'Health-checked every 10 s on /healthz; 2 consecutive failures ejects it from the pool, so detection takes 20–30 s. Handles ~1,000 QPS of business logic on 8 cores.' },
           { id: 'app2', label: 'App Server 2', kind: 'server', x: 700, y: 210, detail: 'Identical stateless clone. During deploys the LB drains it: stop new requests, wait up to 300 s for in-flight ones, then swap the binary. Users see nothing.' },
           { id: 'app3', label: 'App Server N', kind: 'server', x: 700, y: 320, detail: 'Autoscaling adds clones at ~70% CPU. Because the LB discovers targets dynamically, a new node takes traffic within one health-check cycle (~30 s of launch).' },
@@ -189,25 +189,25 @@ class ConsistentHashRing:
       type: 'text',
       title: 'DNS: the load balancer before the load balancer',
       md: `
-Before any packet reaches your LB, DNS already made a routing decision. The cold-cache resolution walk —
-root servers → \`.com\` TLD servers → your authoritative nameserver — costs **20–120 ms**, which is why every layer
+Before any packet reaches your LB, DNS already made a routing decision. The cold-cache resolution walk
+(root servers → \`.com\` TLD servers → your authoritative nameserver) costs **20–120 ms**, which is why every layer
 caches aggressively, governed by the record's **TTL**.
 
 #### The TTL trade-off
 
-- **Long TTL (24 h)**: cheap (fewer queries to pay for) and fast (always cached) — but a failover requires the world's resolvers to expire their cache. A 24 h TTL can mean *a day* of traffic going to a dead IP.
-- **Short TTL (30–60 s)**: failover propagates in about a minute, at the cost of more lookups. This is the standard for anything fronting production traffic. Caveat: some resolvers and OSes ignore very low TTLs and clamp them upward, so DNS failover is never *instant* — treat it as a minutes-scale tool, not a seconds-scale one.
+- **Long TTL (24 h)**: cheap (fewer queries to pay for) and fast (always cached), but a failover requires the world's resolvers to expire their cache. A 24 h TTL can mean *a day* of traffic going to a dead IP.
+- **Short TTL (30–60 s)**: failover propagates in about a minute, at the cost of more lookups. This is the standard for anything fronting production traffic. Caveat: some resolvers and OSes ignore very low TTLs and clamp them upward, so DNS failover is never *instant*. Treat it as a minutes-scale tool, not a seconds-scale one.
 
 #### GeoDNS and latency-based routing
 
 Authoritative servers like Route 53 answer **differently per client location**: EU users get the Frankfurt LB, US
-users get Virginia. Combined with health checks, this gives you region-level failover — if Frankfurt's health check
+users get Virginia. Combined with health checks, this gives you region-level failover: if Frankfurt's health check
 fails, EU users transparently resolve to Virginia and pay ~90 ms extra instead of getting connection refused.
 
 #### Anycast
 
 The heavier-duty alternative: advertise the **same IP from many sites via BGP**, and internet routing delivers each
-packet to the topologically nearest one. No TTL problem at all — when a site dies, routes withdraw in seconds and
+packet to the topologically nearest one. No TTL problem at all: when a site dies, routes withdraw in seconds and
 traffic shifts automatically. This is how Cloudflare's 1.1.1.1, Google's 8.8.8.8, and every serious CDN edge work.
 The catch: long-lived TCP connections can break when routes shift, so anycast suits DNS/CDN front doors better than
 stateful APIs.
@@ -220,14 +220,14 @@ stateful APIs.
 #### Health checks: the LB's eyes
 
 A typical config: probe \`GET /healthz\` every **10 s**, mark unhealthy after **2–3 consecutive failures**, healthy
-again after 2–3 successes. That means worst-case **20–30 s of errors** before a dead node is ejected — tighten the
+again after 2–3 successes. That means worst-case **20–30 s of errors** before a dead node is ejected. Tighten the
 interval for faster detection, but beware flapping: a GC pause or deploy blip shouldn't eject half your fleet. Make
 the endpoint *shallow* (process up, can reach its dependencies) rather than running real queries, or the health check
 itself becomes load.
 
 #### Sticky sessions: useful, dangerous
 
-L7 stickiness (e.g. an LB-issued cookie) pins a user to one backend. It papers over in-memory session state — and
+L7 stickiness (e.g. an LB-issued cookie) pins a user to one backend. It papers over in-memory session state, and
 that's exactly the problem: load skews toward old nodes, autoscaling barely helps (new nodes only get *new* users),
 and when a sticky node dies, every user pinned to it gets logged out at once. The grown-up fix is a **stateless tier
 with sessions in Redis or JWTs**; reserve stickiness for things that genuinely need connection affinity, like
@@ -236,8 +236,8 @@ WebSockets or server-side caches warmed per user.
 #### Who balances the balancer?
 
 The LB must not be the new single point of failure. Self-hosted pattern: an **active-passive HAProxy pair** sharing a
-floating virtual IP via VRRP/keepalived — the standby detects missed heartbeats and claims the VIP in **~1–3
-seconds**. Managed pattern: AWS ELB is *itself a distributed system* — a fleet of LB nodes across your enabled AZs,
+floating virtual IP via VRRP/keepalived; the standby detects missed heartbeats and claims the VIP in **~1–3
+seconds**. Managed pattern: AWS ELB is *itself a distributed system*, a fleet of LB nodes across your enabled AZs,
 fronted by a DNS name with a **60 s TTL** that always resolves to healthy nodes (this is why AWS tells you to use the
 DNS name, never a resolved IP). NLB goes further with a single static IP per AZ implemented on the anycast-style
 Hyperplane fabric.
@@ -252,7 +252,7 @@ Hyperplane fabric.
         { metric: 'ALB cost', value: '~$20/mo + LCU', context: '$0.0225/hr base + $0.008/LCU-hr; mid-size services land at $20–50/month.' },
         { metric: 'Cold DNS lookup', value: '20–120 ms', context: 'Root → TLD → authoritative walk. Cached lookups are ~0–10 ms.' },
         { metric: 'Production DNS TTL', value: '60 s', context: 'Short enough for minutes-scale failover; some resolvers clamp lower values.' },
-        { metric: 'Health check detection', value: '20–30 s', context: '10 s interval × 2–3 failure threshold — plan deploys and failover around it.' },
+        { metric: 'Health check detection', value: '20–30 s', context: '10 s interval × 2–3 failure threshold; plan deploys and failover around it.' },
         { metric: 'Consistent hashing remap', value: '~K/N keys', context: 'Adding the 10th node moves ~10% of keys; naive modulo moves ~90%.' },
       ],
     },
@@ -268,14 +268,14 @@ Hyperplane fabric.
       ],
       answer: 2,
       explanation:
-        'L4 balancers forward at the connection level without parsing payloads — ~100 µs overhead and millions of QPS. L7 features are useless for a non-HTTP protocol and cost milliseconds.',
+        'L4 balancers forward at the connection level without parsing payloads: ~100 µs overhead and millions of QPS. L7 features are useless for a non-HTTP protocol and cost milliseconds.',
     },
     {
       question: 'A cache cluster grows from 4 to 5 nodes. With consistent hashing (vs naive modulo), roughly what fraction of keys remap?',
-      options: ['~20% instead of ~80%', '~50% either way', '0% — keys never move', '~80% instead of ~20%'],
+      options: ['~20% instead of ~80%', '~50% either way', '0%, keys never move', '~80% instead of ~20%'],
       answer: 0,
       explanation:
-        'Consistent hashing moves ~K/N keys (1/5 = 20% here). Naive hash(key) % N reshuffles almost everything — 4/5 of keys land on a different node — which would stampede the database behind the cache.',
+        'Consistent hashing moves ~K/N keys (1/5 = 20% here). Naive hash(key) % N reshuffles almost everything (4/5 of keys land on a different node), which would stampede the database behind the cache.',
     },
     {
       question: 'What is the main operational downside of cookie-based sticky sessions?',
@@ -299,7 +299,7 @@ Hyperplane fabric.
       ],
       answer: 3,
       explanation:
-        'Short TTLs multiply authoritative query load (and bills), and resolvers/OS caches often enforce minimums — so you pay the cost without getting true seconds-level failover. 30–60 s is the practical floor.',
+        'Short TTLs multiply authoritative query load (and bills), and resolvers/OS caches often enforce minimums, so you pay the cost without getting true seconds-level failover. 30–60 s is the practical floor.',
     },
     {
       question: 'Which routing decision can ONLY an L7 load balancer make?',
@@ -322,26 +322,26 @@ Hyperplane fabric.
     },
     {
       question: 'Your single HAProxy node is now the single point of failure. Design LB redundancy, self-hosted and in AWS.',
-      hint: 'Self-hosted: active-passive pair, floating VIP with keepalived/VRRP, ~1–3 s takeover, plus the split-brain risk. AWS: explain that ELB is already a multi-AZ fleet behind a DNS name — use the DNS name, enable cross-zone balancing, and add Route 53 health checks for region-level failover.',
+      hint: 'Self-hosted: active-passive pair, floating VIP with keepalived/VRRP, ~1–3 s takeover, plus the split-brain risk. AWS: explain that ELB is already a multi-AZ fleet behind a DNS name, so use the DNS name, enable cross-zone balancing, and add Route 53 health checks for region-level failover.',
       difficulty: 'Mid',
     },
     {
       question: 'When would you choose consistent hashing over least-connections, and what problem do virtual nodes solve?',
-      hint: 'Consistent hashing when requests must land on the node holding their data (cache tiers, stateful shards) — affinity beats even load. Least-connections when backends are interchangeable. Vnodes (100–200 per node) fix the lumpy key distribution of few ring points and let heterogeneous nodes take proportional load.',
+      hint: 'Consistent hashing when requests must land on the node holding their data (cache tiers, stateful shards), where affinity beats even load. Least-connections when backends are interchangeable. Vnodes (100–200 per node) fix the lumpy key distribution of few ring points and let heterogeneous nodes take proportional load.',
       difficulty: 'Mid',
     },
     {
       question: 'Design global traffic routing for a service in 3 regions: normal operation, one region failing, and a full region evacuation.',
-      hint: 'Layered answer: GeoDNS/latency-based routing with 60 s TTLs and health checks for steady state; anycast front door (or Global Accelerator) for faster failover than DNS allows; weighted records to drain a region gradually; discuss the capacity question — surviving regions need headroom for ~50% more traffic (N+1 across regions).',
+      hint: 'Layered answer: GeoDNS/latency-based routing with 60 s TTLs and health checks for steady state; anycast front door (or Global Accelerator) for faster failover than DNS allows; weighted records to drain a region gradually; discuss the capacity question, since surviving regions need headroom for ~50% more traffic (N+1 across regions).',
       difficulty: 'Senior',
     },
   ],
   commonMistakes: [
-    'Drawing a load balancer as a magic box without saying L4 or L7. The layer determines what routing is even possible — and interviewers ask precisely that follow-up.',
-    'Using sticky sessions to avoid externalizing session state. You inherit skewed load, useless autoscaling, and mass logouts on node failure — Redis-backed sessions cost an afternoon and remove the whole class of problems.',
+    'Drawing a load balancer as a magic box without saying L4 or L7. The layer determines what routing is even possible, and interviewers ask precisely that follow-up.',
+    'Using sticky sessions to avoid externalizing session state. You inherit skewed load, useless autoscaling, and mass logouts on node failure. Redis-backed sessions cost an afternoon and remove the whole class of problems.',
     'Forgetting the LB itself can fail. One nginx box in front of ten app servers has just moved the single point of failure, not removed it.',
-    'Treating DNS failover as instant. Between TTL caching and resolvers clamping low TTLs, DNS-level changes take minutes to propagate — design failover at the LB/anycast layer when seconds matter.',
-    'Hashing by client IP for session affinity and then wondering why one backend melts — corporate NATs put thousands of users behind a single IP.',
+    'Treating DNS failover as instant. Between TTL caching and resolvers clamping low TTLs, DNS-level changes take minutes to propagate, so design failover at the LB/anycast layer when seconds matter.',
+    'Hashing by client IP for session affinity and then wondering why one backend melts: corporate NATs put thousands of users behind a single IP.',
   ],
   cloudMappings: [
     { concept: 'L7 load balancer', aws: 'Application Load Balancer (ALB)', gcp: 'Global External Application LB', azure: 'Application Gateway' },

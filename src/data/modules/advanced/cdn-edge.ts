@@ -5,7 +5,7 @@ const cdnEdge: Module = {
   category: 'advanced',
   title: 'CDNs & Edge Computing',
   description:
-    'Physics makes distant servers slow. CDNs move bytes — and increasingly compute — to within ~30 ms of every user. Learn PoPs, cache headers, invalidation, edge functions, and signed URLs.',
+    'Physics makes distant servers slow. CDNs move bytes (and increasingly compute) to within ~30 ms of every user. Learn PoPs, cache headers, invalidation, edge functions, and signed URLs.',
   difficulty: 'Mid',
   estMinutes: 120,
   keywords: ['CDN', 'edge computing', 'Cache-Control', 'origin shield', 'anycast', 'stale-while-revalidate', 'signed URLs'],
@@ -16,7 +16,7 @@ const cdnEdge: Module = {
       title: 'Distance is latency: the speed-of-light budget',
       md: `
 No amount of clever engineering beats physics. Light in fiber travels at ~200,000 km/s (two-thirds of c, thanks to
-the glass's refractive index) — about **5 ms per 1,000 km one way, ~10 ms round trip**. And real packets don't take
+the glass's refractive index): about **5 ms per 1,000 km one way, ~10 ms round trip**. And real packets don't take
 great-circle routes; they zigzag through carrier hotels and add router hops, so multiply the theoretical minimum by
 1.5–2×.
 
@@ -27,7 +27,7 @@ The budget for a user in Sydney hitting a server in Virginia (~15,700 km):
 - A page making 4 sequential requests: **over a second of pure travel time**, before your servers do any work.
 
 Compare a CDN edge node 30 km away in Sydney: **~1–10 ms RTT**, handshake included for cached content. Same app, same
-code — 50× faster, purely by moving bytes closer.
+code, 50× faster, purely by moving bytes closer.
 
 This is the entire thesis of a **Content Delivery Network**: thousands of cache servers in hundreds of cities, so
 that for the ~90–99% of requests that hit cache, the speed-of-light tax is nearly zero. Cloudflare operates in
@@ -44,20 +44,20 @@ on fewer (~100) but much larger PoPs.
       md: `
 A CDN is a tree of caches between users and your origin:
 
-- **PoPs (points of presence)** — racks of cache servers in internet exchange points worldwide. Users reach the
+- **PoPs (points of presence)**: racks of cache servers in internet exchange points worldwide. Users reach the
   nearest one via **anycast**: every PoP advertises the *same IP* (e.g. Cloudflare's 104.16.0.0/13) via BGP, and
   internet routing naturally delivers each packet to the topologically closest PoP. No GeoDNS gymnastics; failover is
   automatic because a withdrawn route stops attracting traffic.
-- **Cache hierarchy** — a miss at an edge PoP doesn't necessarily go to your origin. Edges often check a **regional
+- **Cache hierarchy**: a miss at an edge PoP doesn't necessarily go to your origin. Edges often check a **regional
   shield/parent tier** first, which aggregates misses from dozens of edges.
-- **Origin shield** — one designated PoP that all others fetch through on a miss. With 300 PoPs and no shield, an
+- **Origin shield**: one designated PoP that all others fetch through on a miss. With 300 PoPs and no shield, an
   expiring popular object can trigger up to 300 simultaneous origin fetches; with a shield, **one** request reaches
   the origin and 300 PoPs share the answer. Origin offload routinely improves from ~85% to **98%+**.
-- **Request collapsing** — within a PoP, 10,000 concurrent requests for the same uncached object become a single
+- **Request collapsing**: within a PoP, 10,000 concurrent requests for the same uncached object become a single
   origin fetch; the other 9,999 wait on it. This plus the shield is your thundering-herd insurance.
 
 What CDNs cache by default: responses with explicit caching headers, keyed by URL (plus any headers/cookies you
-configure into the **cache key** — keep that key minimal; adding \`Cookie\` to it destroys your hit ratio). Static
+configure into the **cache key**; keep that key minimal, since adding \`Cookie\` to it destroys your hit ratio). Static
 assets routinely hit **90–99%**; even "dynamic" HTML cached for 30 s can absorb a front-page traffic spike.
 `,
     },
@@ -112,7 +112,7 @@ assets routinely hit **90–99%**; even "dynamic" HTML cached for 30 s can absor
             x: 460,
             y: 190,
             detail:
-              'A designated PoP near the origin (e.g. Ashburn) that all edges fetch through. Collapses misses from 300+ PoPs into one origin request per object — origin offload rises from ~85% to 98%+.',
+              'A designated PoP near the origin (e.g. Ashburn) that all edges fetch through. Collapses misses from 300+ PoPs into one origin request per object, so origin offload rises from ~85% to 98%+.',
           },
           {
             id: 'origin',
@@ -121,7 +121,7 @@ assets routinely hit **90–99%**; even "dynamic" HTML cached for 30 s can absor
             x: 690,
             y: 70,
             detail:
-              'The app servers. Thanks to the shield they see ~2% of total request volume, smooth instead of spiky — a fleet sized for 1,000 QPS fronts 50,000 QPS of user traffic.',
+              'The app servers. Thanks to the shield they see ~2% of total request volume, smooth instead of spiky. A fleet sized for 1,000 QPS fronts 50,000 QPS of user traffic.',
           },
           {
             id: 's3',
@@ -147,23 +147,23 @@ assets routinely hit **90–99%**; even "dynamic" HTML cached for 30 s can absor
       type: 'text',
       title: 'Cache-Control: the protocol you already ship',
       md: `
-HTTP caching is controlled by response headers — no CDN config required if you get these right:
+HTTP caching is controlled by response headers. No CDN config required if you get these right:
 
-- \`Cache-Control: max-age=31536000\` — any cache (browser *and* CDN) may store this for a year.
-- \`s-maxage=600\` — overrides \`max-age\` for **shared caches only** (CDNs). The killer combo:
-  \`max-age=0, s-maxage=600\` means "browsers must revalidate, but the CDN may serve it for 10 minutes" — you keep
+- \`Cache-Control: max-age=31536000\`: any cache (browser *and* CDN) may store this for a year.
+- \`s-maxage=600\` overrides \`max-age\` for **shared caches only** (CDNs). The killer combo:
+  \`max-age=0, s-maxage=600\` means "browsers must revalidate, but the CDN may serve it for 10 minutes". You keep
   purge-ability at the edge without stale browsers you can't reach.
-- \`stale-while-revalidate=60\` — after expiry, serve the stale copy *instantly* while refreshing in the background.
+- \`stale-while-revalidate=60\`: after expiry, serve the stale copy *instantly* while refreshing in the background.
   Users never wait on origin latency; your cache is at worst a TTL+60 s behind. This single directive removes the
   latency cliff at expiry.
-- \`stale-if-error=86400\` — origin down? Serve yesterday's copy rather than a 502. Free graceful degradation.
-- \`private\` — browser may cache, CDN must not (user-specific data). \`no-store\` — nobody caches (auth tokens, PII).
-- \`ETag\` + conditional requests — revalidation costs a ~100-byte 304 instead of a full body transfer.
+- \`stale-if-error=86400\`: origin down? Serve yesterday's copy rather than a 502. Free graceful degradation.
+- \`private\`: browser may cache, CDN must not (user-specific data). \`no-store\` means nobody caches (auth tokens, PII).
+- \`ETag\` + conditional requests: revalidation costs a ~100-byte 304 instead of a full body transfer.
 
 Two mistakes dominate real-world incidents:
 
 1. **Caching personalized responses in a shared cache.** \`Cache-Control: max-age=600\` on \`/api/me\` once served
-   user A's profile to user B. If a response varies per user, it's \`private\` or \`no-store\` — full stop.
+   user A's profile to user B. If a response varies per user, it's \`private\` or \`no-store\`, full stop.
 2. **No headers at all**, which makes CDN behavior vendor-default-dependent and browsers guess (heuristic caching).
    Be explicit on every route.
 `,
@@ -213,18 +213,18 @@ location /api/me {
 "How do I update a file cached in 300 cities for a year?" Wrong question. The right design makes invalidation
 unnecessary:
 
-#### Versioned (fingerprinted) URLs — the gold standard
+#### Versioned (fingerprinted) URLs: the gold standard
 
 Every build hashes each asset's content into its filename: \`app.4f8a2c.js\`. Deploying new code produces a *new URL*;
 the HTML (cached only ~minutes) references it; the old file simply ages out untouched. You get:
 
-- **Atomic deploys** — old HTML keeps loading old assets; no mid-deploy version skew where new HTML pulls old JS.
-- **Instant rollback** — re-point the HTML; both asset versions are still cached.
+- **Atomic deploys**: old HTML keeps loading old assets; no mid-deploy version skew where new HTML pulls old JS.
+- **Instant rollback**: re-point the HTML; both asset versions are still cached.
 - **max-age=1 year, immutable** with zero risk. Every bundler (Vite, webpack, Next.js) does this by default.
 
-#### Purges — the escape hatch
+#### Purges: the escape hatch
 
-For content you *can't* version — HTML at a fixed URL, a product image you must replace in place — CDNs offer purge
+For content you *can't* version (HTML at a fixed URL, a product image you must replace in place), CDNs offer purge
 APIs. Speed varies wildly by vendor: **Fastly purges globally in ~150 ms** (it's a core product feature),
 **Cloudflare in seconds**, **CloudFront invalidations take minutes** and cost $0.005/path after the first 1,000/month.
 Tag-based purging ("purge everything tagged product-1234") via \`Surrogate-Key\` headers is the scalable variant.
@@ -235,11 +235,11 @@ Tag-based purging ("purge everything tagged product-1234") via \`Surrogate-Key\`
     },
     {
       type: 'text',
-      title: 'Compute at the edge — and keeping private content private',
+      title: 'Compute at the edge, and keeping private content private',
       md: `
 Modern CDNs run your code in every PoP, not just your bytes:
 
-- **Cloudflare Workers** run on V8 **isolates** — no container, no VM — giving **~0 ms cold starts (<5 ms)** and a
+- **Cloudflare Workers** run on V8 **isolates** (no container, no VM), giving **~0 ms cold starts (<5 ms)** and a
   free tier of 100K requests/day. Constraints: V8 runtime (JS/WASM), 128 MB memory, CPU-milliseconds budgets.
 - **Lambda@Edge** runs full Node/Python at AWS regional edge locations: more powerful, but cold starts of
   **hundreds of ms to seconds** and ~$0.60/million requests vs Workers' ~$0.30/million. CloudFront Functions is the
@@ -247,14 +247,14 @@ Modern CDNs run your code in every PoP, not just your bytes:
 
 What edge code is *for*: A/B test bucketing without a round trip, auth token validation before requests reach you,
 geo-personalization (currency, language), rewriting cache keys, serving entire APIs from edge KV stores. What it's
-*not* for: anything needing your primary database — the edge is 100+ ms from your data, so a "fast" edge function
+*not* for: anything needing your primary database. The edge is 100+ ms from your data, so a "fast" edge function
 that makes 3 origin DB calls is slower than no edge function at all.
 
 #### Signed URLs: private content on a public CDN
 
 You can't put \`Authorization\` checks on every image if the CDN serves them without touching your origin. Instead,
-your app **signs URLs**: it appends an expiry timestamp and an HMAC (or RSA) signature —
-\`/video.mp4?expires=1718200000&sig=9f3a...\` — and edge servers validate the signature cryptographically, **no origin
+your app **signs URLs**: it appends an expiry timestamp and an HMAC (or RSA) signature, as in
+\`/video.mp4?expires=1718200000&sig=9f3a...\`, and edge servers validate the signature cryptographically, **no origin
 call needed**. Expired or tampered → 403 at the edge.
 
 - S3 presigned URLs and CloudFront signed URLs/cookies: standard for private media (signed *cookies* cover "this user
@@ -318,10 +318,10 @@ call needed**. Expired or tampered → 403 at the edge.
     {
       question: 'A user in Sydney calls an API in Virginia (~15,700 km). Ignoring server time, roughly what is the floor for a single HTTPS request on a cold connection?',
       options: [
-        '~50 ms — modern TLS is free',
-        '~150 ms — one round trip',
-        '~700 ms — DNS makes it unbounded',
-        '~450 ms — TCP+TLS handshakes cost ~2 RTTs before the request, at ~220 ms real-world RTT',
+        '~50 ms: modern TLS is free',
+        '~150 ms: one round trip',
+        '~700 ms: DNS makes it unbounded',
+        '~450 ms: TCP+TLS handshakes cost ~2 RTTs before the request, at ~220 ms real-world RTT',
       ],
       answer: 3,
       explanation:
@@ -331,13 +331,13 @@ call needed**. Expired or tampered → 403 at the edge.
       question: 'What does an origin shield primarily protect against?',
       options: [
         'DDoS attacks on the edge PoPs',
-        'Hundreds of PoPs independently fetching the same expiring object — a thundering herd on the origin',
+        'Hundreds of PoPs independently fetching the same expiring object, a thundering herd on the origin',
         'Stale content being served after a purge',
         'TLS downgrade attacks between edge and origin',
       ],
       answer: 1,
       explanation:
-        'Without a shield, every PoP that misses goes to your origin — potentially 300+ simultaneous fetches per object. The shield funnels all PoP misses through one cache, so the origin sees one request and offload climbs to 98%+.',
+        'Without a shield, every PoP that misses goes to your origin, potentially 300+ simultaneous fetches per object. The shield funnels all PoP misses through one cache, so the origin sees one request and offload climbs to 98%+.',
     },
     {
       question: 'Which header tells CDNs to cache for 10 minutes while forcing browsers to revalidate every time?',
@@ -361,13 +361,13 @@ call needed**. Expired or tampered → 403 at the edge.
       ],
       answer: 2,
       explanation:
-        'Content-hashed URLs make cached objects immutable: old HTML references old assets, new HTML references new ones — no version skew, no purge propagation delay, and both versions remain cached for rollback.',
+        'Content-hashed URLs make cached objects immutable: old HTML references old assets, new HTML references new ones. No version skew, no purge propagation delay, and both versions remain cached for rollback.',
     },
     {
       question: 'Why do Cloudflare Workers start in ~0 ms while Lambda@Edge can take a second?',
       options: [
         'Workers are precompiled to machine code',
-        'Workers run as V8 isolates inside an already-running process — no container or VM to boot per tenant',
+        'Workers run as V8 isolates inside an already-running process, with no container or VM to boot per tenant',
         'Cloudflare has more data centers, so code is always nearby',
         'Lambda@Edge re-downloads the function bundle on every request',
       ],
@@ -399,9 +399,9 @@ call needed**. Expired or tampered → 403 at the edge.
     },
   ],
   commonMistakes: [
-    'Letting cookies or query strings into the cache key. One marketing utm_ parameter and every visitor gets a unique cache entry — hit ratio collapses to nothing while everyone blames the CDN.',
+    'Letting cookies or query strings into the cache key. One marketing utm_ parameter and every visitor gets a unique cache entry, so hit ratio collapses to nothing while everyone blames the CDN.',
     'Caching personalized responses in a shared cache. max-age on /api/me has served user A’s data to user B at real companies. Per-user responses are private or no-store, every time.',
-    'Relying on purges as the deploy mechanism. CloudFront invalidations take minutes and old browsers cache aggressively — fingerprinted URLs make the whole problem disappear.',
+    'Relying on purges as the deploy mechanism. CloudFront invalidations take minutes and old browsers cache aggressively; fingerprinted URLs make the whole problem disappear.',
     'Treating the CDN as static-only. Caching HTML or read-heavy APIs for even 10–30 s with stale-while-revalidate absorbs 100× spikes; teams leave this on the table because "our content is dynamic".',
     'Putting an edge function in front of every request that then calls the origin database three times. The edge is 100+ ms from your data; edge compute must work with edge-local state (KV, cache, request itself) or it makes latency worse.',
   ],

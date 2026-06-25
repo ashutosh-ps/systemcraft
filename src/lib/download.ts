@@ -44,7 +44,7 @@ export function moduleToMarkdown(mod: Module): string {
   }
 
   lines.push('---')
-  lines.push('Generated from SystemCraft — Interactive System Design Course')
+  lines.push('Generated from SystemCraft, the interactive system design course.')
   return lines.join('\n')
 }
 
@@ -67,21 +67,21 @@ function sectionToMarkdown(section: Section): string[] {
       break
     }
     case 'keyNumbers':
-      for (const n of section.numbers) out.push(`- **${n.metric}:** ${n.value} — ${n.context}`)
+      for (const n of section.numbers) out.push(`- **${n.metric}:** ${n.value}. ${n.context}`)
       break
     case 'diagram':
-      out.push(`*[Interactive diagram${section.caption ? `: ${section.caption}` : ''} — view online]*`)
+      out.push(`*[Interactive diagram${section.caption ? `: ${section.caption}` : ''}. View online]*`)
       break
     case 'calculator':
-      out.push('*[Interactive capacity calculator — view online]*')
+      out.push('*[Interactive capacity calculator. View online]*')
       break
     case 'tradeoff':
-      out.push('*[Interactive consistency/availability trade-off visualizer — view online]*')
+      out.push('*[Interactive consistency/availability trade-off visualizer. View online]*')
       break
     case 'beforeAfter': {
       const s = section.scenario
-      out.push(`**Before — ${s.beforeTitle}:** ${s.beforeDescription}`, '')
-      out.push(`**After — ${s.afterTitle}:** ${s.afterDescription}`, '')
+      out.push(`**Before (${s.beforeTitle}):** ${s.beforeDescription}`, '')
+      out.push(`**After (${s.afterTitle}):** ${s.afterDescription}`, '')
       for (const m of s.metrics) out.push(`- ${m.label}: ${m.before} → ${m.after}`)
       break
     }

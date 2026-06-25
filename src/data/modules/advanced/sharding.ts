@@ -34,7 +34,7 @@ physics and operations gang up on you:
 - **Operations become scary.** At 5 TB, a \`pg_dump\` takes hours, \`VACUUM FULL\` is a weekend event, adding an index locks for minutes, and a restore-from-backup RTO is measured in *half-days*.
 
 **Sharding (horizontal partitioning)** splits one logical dataset across N independent databases, each owning a
-disjoint slice of rows. Each shard is small, fast, and boring again — backups in minutes, working set in RAM,
+disjoint slice of rows. Each shard is small, fast, and boring again: backups in minutes, working set in RAM,
 writes spread N ways.
 
 > Interview tip: always present sharding as the *third* act. "Vertical + cache → read replicas → shard." Jumping
@@ -43,24 +43,24 @@ writes spread N ways.
     },
     {
       type: 'text',
-      title: 'Vertical vs horizontal partitioning — and choosing a shard key',
+      title: 'Vertical vs horizontal partitioning, and choosing a shard key',
       md: `
 #### Two axes of splitting
 
 - **Vertical partitioning** splits by *column or table*: move \`user_profiles\` to one database and \`orders\` to another (this is also the data side of microservices). Easy wins, but each piece can still outgrow a machine.
-- **Horizontal partitioning (sharding)** splits by *row*: users 1–10M on shard 0, 10M–20M on shard 1. This is the one that scales writes indefinitely — and the one this module is about.
+- **Horizontal partitioning (sharding)** splits by *row*: users 1–10M on shard 0, 10M–20M on shard 1. This is the one that scales writes indefinitely, and the one this module is about.
 
 #### The shard key decides everything
 
 The shard key is the column whose value routes a row to a shard. You will live with this choice for years. Judge
 candidates on three properties:
 
-1. **High cardinality.** \`user_id\` (hundreds of millions of values) spreads load; \`country\` (~200 values) cannot — the US shard melts while Liechtenstein idles.
+1. **High cardinality.** \`user_id\` (hundreds of millions of values) spreads load; \`country\` (~200 values) cannot: the US shard melts while Liechtenstein idles.
 2. **Even access distribution.** Cardinality isn't enough if 1% of keys get 90% of traffic. More on celebrities later.
 3. **Matches your query pattern.** If 95% of queries are "everything for this user," shard by \`user_id\` and those queries stay single-shard. Shard by \`order_id\` instead and every user-history page becomes a scatter-gather across all N shards.
 
 **Monotonic keys are a trap.** Sharding by auto-increment ID or timestamp means *all new writes* land on the
-newest range — one shard takes 100% of insert traffic while the rest serve cold history. This is the classic
+newest range. One shard takes 100% of insert traffic while the rest serve cold history. This is the classic
 hot-shard anti-pattern; it's why DynamoDB docs spend pages warning against timestamp partition keys.
 `,
     },
@@ -79,21 +79,21 @@ hot-shard anti-pattern; it's why DynamoDB docs spend pages warning against times
           ],
           [
             'Range scans',
-            'Excellent — adjacent keys co-located',
-            'Impossible — adjacent keys scattered',
-            'Impossible — same as hash',
+            'Excellent: adjacent keys co-located',
+            'Impossible: adjacent keys scattered',
+            'Impossible: same as hash',
             'Possible if directory groups ranges',
           ],
           [
             'Hot-spot risk',
             'High with monotonic keys (newest range is hot)',
-            'Low — uniform spread',
+            'Low: uniform spread',
             'Low, tunable via vnode count',
             'Depends entirely on assignment policy',
           ],
           [
             'Adding a shard',
-            'Split one range — moves only that range',
+            'Split one range, moves only that range',
             'Re-mod everything: ~all keys move',
             'Moves only ~1/N of keys',
             'Update table; move chosen tenants only',
@@ -159,7 +159,7 @@ hot-shard anti-pattern; it's why DynamoDB docs spend pages warning against times
             x: 540,
             y: 40,
             detail:
-              'Owns ~25% of the keyspace via ~256 virtual nodes. ~800 GB of data, ~2K write TPS — comfortably inside single-Postgres limits with room to grow.',
+              'Owns ~25% of the keyspace via ~256 virtual nodes. ~800 GB of data, ~2K write TPS, comfortably inside single-Postgres limits with room to grow.',
           },
           {
             id: 'shard1',
@@ -177,7 +177,7 @@ hot-shard anti-pattern; it's why DynamoDB docs spend pages warning against times
             x: 540,
             y: 260,
             detail:
-              'Hash distribution keeps shards within ~5-10% of each other on storage and QPS — verify with per-shard dashboards, skew creeps in over time.',
+              'Hash distribution keeps shards within ~5-10% of each other on storage and QPS. Verify with per-shard dashboards, skew creeps in over time.',
           },
           {
             id: 'shard3',
@@ -236,7 +236,7 @@ class Ring:
             point = h(shard + "#" + str(v))
             bisect.insort(self.points, (point, shard))
         # Adding shard N+1 moves only ~1/(N+1) of all keys.
-        # Naive "hash mod N" would move ~N/(N+1) — nearly everything.
+        # Naive "hash mod N" would move ~N/(N+1): nearly everything.
 
     def remove_shard(self, shard: str):
         self.points = [(p, s) for (p, s) in self.points if s != shard]
@@ -260,15 +260,15 @@ ring.lookup("user:184467")   # -> deterministic shard, ~25% per shard
       type: 'text',
       title: 'Resharding: the bill comes due',
       md: `
-Whatever shard count you pick, you will outgrow it. **Resharding** — changing how keys map to shards while the
-system serves production traffic — is where sharding designs go to die, so plan it on day one.
+Whatever shard count you pick, you will outgrow it. **Resharding** (changing how keys map to shards while the
+system serves production traffic) is where sharding designs go to die, so plan it on day one.
 
 #### Two tricks that make it survivable
 
 **1. Logical shards >> physical shards.** Instagram's classic scheme: a 64-bit ID packs **41 bits of millisecond
-timestamp, 13 bits of logical shard ID (8,192 logical shards), and 10 bits of per-shard sequence** (mod 1024 —
+timestamp, 13 bits of logical shard ID (8,192 logical shards), and 10 bits of per-shard sequence** (mod 1024,
 so each logical shard can mint 1,024 IDs/ms). Those thousands of logical shards started out mapped onto just a
-handful of Postgres machines. "Resharding" became *moving logical shards between machines* — a routing-table
+handful of Postgres machines. "Resharding" became *moving logical shards between machines*: a routing-table
 update plus a data copy, never a re-hash of the keyspace.
 
 **2. Online resharding, Vitess-style.** Vitess (built to scale YouTube's MySQL, now CNCF-graduated and running
@@ -277,7 +277,7 @@ Slack's MySQL fleet and Shopify-scale workloads) reshards with **VReplication**:
 - Start the new target shards alongside the old ones.
 - **Copy phase:** stream a consistent snapshot of rows into the targets while production continues.
 - **Catch-up phase:** tail the source binlogs and apply ongoing changes until replication lag is near zero.
-- **Cutover:** briefly block writes (typically **<1 s**), verify positions match, flip the routing rules in the topology store, and — crucially — keep a *reverse* replication stream so you can roll back.
+- **Cutover:** briefly block writes (typically **<1 s**), verify positions match, flip the routing rules in the topology store, and (crucially) keep a *reverse* replication stream so you can roll back.
 
 > The litmus test for any sharding design: "describe your resharding procedure." If the answer involves downtime
 > or a big-bang migration script, the design isn't finished.
@@ -290,14 +290,14 @@ Slack's MySQL fleet and Shopify-scale workloads) reshards with **VReplication**:
 A query that can't be routed to one shard becomes a **scatter-gather**: the router fans out to all N shards, each
 executes the query, and the router merges results. It works, but every property you care about degrades:
 
-- **Latency is the max, not the average.** Your p50 becomes the *slowest* shard's p50; one slow shard drags every scatter-gather query. With 8 shards and per-shard p99 of 20 ms, fan-out p99 is roughly 1 − (0.99)^8 ≈ 8% chance of hitting a slow tail — your effective p92 is now 20 ms+.
+- **Latency is the max, not the average.** Your p50 becomes the *slowest* shard's p50; one slow shard drags every scatter-gather query. With 8 shards and per-shard p99 of 20 ms, fan-out p99 is roughly 1 − (0.99)^8 ≈ 8% chance of hitting a slow tail. Your effective p92 is now 20 ms+.
 - **Throughput divides.** A scatter-gather costs N shard-queries' worth of work, so a cluster that does 100K single-shard QPS does ~12K fan-out QPS across 8 shards.
-- **Cross-shard transactions are worse.** Two-phase commit (2PC) holds locks across a network round trip on every participant, adds 2 extra RTTs (~2–10 ms), and a crashed coordinator leaves participants blocked. Spanner makes this work with TrueTime and Paxos per shard — you probably shouldn't.
+- **Cross-shard transactions are worse.** Two-phase commit (2PC) holds locks across a network round trip on every participant, adds 2 extra RTTs (~2–10 ms), and a crashed coordinator leaves participants blocked. Spanner makes this work with TrueTime and Paxos per shard, but you probably shouldn't.
 
 #### What to do instead
 
 - **Denormalize so reads are single-shard.** Store the data twice, keyed both ways (e.g., \`orders_by_user\` and \`orders_by_merchant\`), updated via an async pipeline.
-- **Keep entities that transact together on the same shard** — shard by \`tenant_id\` so a tenant's invoices, payments, and users co-locate.
+- **Keep entities that transact together on the same shard:** shard by \`tenant_id\` so a tenant's invoices, payments, and users co-locate.
 - **Push analytics out.** Cross-shard aggregations belong in a warehouse (BigQuery, Snowflake) fed by CDC, not in the OLTP path.
 - **Accept sagas** (compensating actions) for the rare cross-shard write flow, instead of distributed locks.
 `,
@@ -306,7 +306,7 @@ executes the query, and the router merges results. It works, but every property 
       type: 'text',
       title: 'Hot spots and the celebrity problem',
       md: `
-Hashing spreads *keys* evenly — it does nothing about *traffic per key*. When Justin Bieber posts, every like and
+Hashing spreads *keys* evenly, but it does nothing about *traffic per key*. When Justin Bieber posts, every like and
 comment hits **one** \`post_id\`, on one shard, on one row. Twitter, Instagram, and every social platform has a
 named internal version of "the Bieber problem."
 
@@ -316,9 +316,9 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
 
 #### Mitigations, in escalation order
 
-1. **Cache in front.** A celebrity post's content is identical for everyone — serve it from Redis/CDN and absorb 99%+ of reads before they touch a shard.
-2. **Salt hot write keys.** Split \`post:123:likes\` into \`post:123:likes:0..15\` (append a random 0–15 suffix). Writes spread across 16 shards/partitions; reads sum 16 counters. You trade read cost for write headroom — standard for counters and time-series.
-3. **Split the hot range/key.** Range-sharded systems (HBase, Spanner, DynamoDB adaptive capacity) detect hot ranges and split them automatically — even down to isolating a *single item* on its own partition.
+1. **Cache in front.** A celebrity post's content is identical for everyone: serve it from Redis/CDN and absorb 99%+ of reads before they touch a shard.
+2. **Salt hot write keys.** Split \`post:123:likes\` into \`post:123:likes:0..15\` (append a random 0–15 suffix). Writes spread across 16 shards/partitions; reads sum 16 counters. You trade read cost for write headroom, standard for counters and time-series.
+3. **Split the hot range/key.** Range-sharded systems (HBase, Spanner, DynamoDB adaptive capacity) detect hot ranges and split them automatically, even down to isolating a *single item* on its own partition.
 4. **Special-case the celebrities.** Many feeds use fan-out-on-write for normal users but fan-out-on-read for accounts with >1M followers. A hard-coded "famous list" is ugly and ubiquitous.
 
 > Monitor **per-shard** p99 and QPS, not cluster averages. A cluster at 30% average utilization with one shard at
@@ -336,7 +336,7 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
       scenario: {
         beforeTitle: 'Single Postgres primary doing everything',
         beforeDescription:
-          'One r6i.8xlarge primary at 5.5 TB and 42K TPS — within 10% of its write ceiling. Buffer pool hit rate down to 92%, nightly backups take 6 hours, VACUUM falls behind weekly, and adding an index means a maintenance window. Every incident is a company-wide incident.',
+          'One r6i.8xlarge primary at 5.5 TB and 42K TPS, within 10% of its write ceiling. Buffer pool hit rate down to 92%, nightly backups take 6 hours, VACUUM falls behind weekly, and adding an index means a maintenance window. Every incident is a company-wide incident.',
         afterTitle: '8 hash-sharded primaries behind vtgate-style routers',
         afterDescription:
           'Keyspace split by hash(user_id) into 8,192 logical shards mapped to 8 physical primaries (each with 2 replicas). Each shard holds ~700 GB and ~6K TPS. Routers consult the topology store; resharding is a background vnode move, not a migration project.',
@@ -345,7 +345,7 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
           { label: 'Data per database', before: '5.5 TB', after: '~700 GB', improved: true },
           { label: 'p99 write latency (peak)', before: '85 ms', after: '9 ms', improved: true },
           { label: 'Backup / restore window', before: '6 h / 9 h', after: '40 min / 1 h per shard', improved: true },
-          { label: 'Cross-entity transactions', before: 'Free (single node)', after: 'Sagas or 2PC — redesigned', improved: false },
+          { label: 'Cross-entity transactions', before: 'Free (single node)', after: 'Sagas or 2PC, redesigned', improved: false },
         ],
       },
     },
@@ -357,7 +357,7 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
       options: [
         'Reads become impossible to route',
         'Hash collisions corrupt data across shards',
-        'All inserts concentrate on the shard owning the newest range — a hot shard',
+        'All inserts concentrate on the shard owning the newest range: a hot shard',
         'Storage usage becomes uneven across old shards',
       ],
       answer: 2,
@@ -400,7 +400,7 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
       ],
       answer: 3,
       explanation:
-        'A single partition key lives on one partition, which caps at 3,000 RCU / 1,000 WCU / 10 GB. Total table capacity can’t help one hot key — you need caching or key salting.',
+        'A single partition key lives on one partition, which caps at 3,000 RCU / 1,000 WCU / 10 GB. Total table capacity can’t help one hot key. You need caching or key salting.',
     },
     {
       question: 'What makes Vitess-style online resharding safe to run in production?',
@@ -412,7 +412,7 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
       ],
       answer: 1,
       explanation:
-        'VReplication’s copy + catch-up + brief cutover pattern keeps downtime sub-second, and the reverse stream means a bad cutover can be undone — the property that makes teams actually willing to reshard.',
+        'VReplication’s copy + catch-up + brief cutover pattern keeps downtime sub-second, and the reverse stream means a bad cutover can be undone: the property that makes teams actually willing to reshard.',
     },
   ],
   interviewQuestions: [
@@ -423,7 +423,7 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
     },
     {
       question: 'How would you pick the shard key for a multi-tenant SaaS (think Slack workspaces)?',
-      hint: 'Look for: tenant_id keeps each tenant’s queries single-shard and transactions intra-tenant; discuss the whale-tenant problem (one workspace bigger than a shard) and answers — directory-based placement so big tenants get dedicated shards, or sub-sharding the whale by channel/user.',
+      hint: 'Look for: tenant_id keeps each tenant’s queries single-shard and transactions intra-tenant; discuss the whale-tenant problem (one workspace bigger than a shard) and answers: directory-based placement so big tenants get dedicated shards, or sub-sharding the whale by channel/user.',
       difficulty: 'Mid',
     },
     {
@@ -433,16 +433,16 @@ A single hot partition key hitting 5,000 reads/s gets throttled no matter how mu
     },
     {
       question: 'A scatter-gather query across your 16 shards has terrible p99. Diagnose and fix.',
-      hint: 'Structure: tail-at-scale math (p99 of fan-out ≈ chance any shard is slow — with 16 shards you hit a per-shard p99 event ~15% of the time), then fixes: denormalized single-shard read models, hedged/backup requests after p95, partial results with timeouts, moving the query to an async/analytics path.',
+      hint: 'Structure: tail-at-scale math (p99 of fan-out ≈ chance any shard is slow, with 16 shards you hit a per-shard p99 event ~15% of the time), then fixes: denormalized single-shard read models, hedged/backup requests after p95, partial results with timeouts, moving the query to an async/analytics path.',
       difficulty: 'Senior',
     },
   ],
   commonMistakes: [
-    'Sharding too early. A few TB and <40K TPS fits one well-tuned Postgres plus replicas — sharding before that trades a hardware problem for a permanent engineering tax.',
+    'Sharding too early. A few TB and <40K TPS fits one well-tuned Postgres plus replicas; sharding before that trades a hardware problem for a permanent engineering tax.',
     'Choosing the shard key to match today’s biggest table instead of the dominant query pattern. If 95% of reads are per-user, shard by user_id even if orders is the big table.',
     'Shipping hash mod N because consistent hashing "seemed complicated." The first capacity expansion then requires migrating ~90% of your data.',
     'Designing the happy path and hand-waving resharding. If you can’t describe the online copy + catch-up + cutover procedure, you’ve designed a system you can’t grow.',
-    'Watching cluster-average dashboards. Hot shards hide in averages — alert on per-shard p99, per-shard QPS, and max/min shard skew ratio.',
+    'Watching cluster-average dashboards. Hot shards hide in averages; alert on per-shard p99, per-shard QPS, and max/min shard skew ratio.',
   ],
   cloudMappings: [
     { concept: 'Managed sharded SQL (MySQL)', aws: 'Aurora Limitless / RDS + Vitess on EKS', gcp: 'Cloud SQL + Vitess on GKE / PlanetScale', azure: 'Azure Database for MySQL + Vitess on AKS' },

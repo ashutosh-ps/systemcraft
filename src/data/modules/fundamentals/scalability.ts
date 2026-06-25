@@ -15,16 +15,16 @@ const scalability: Module = {
       type: 'text',
       title: 'Why systems need to scale',
       md: `
-A single well-tuned server takes you surprisingly far — a modern 32-core machine with 128 GB RAM can serve
+A single well-tuned server takes you surprisingly far. A modern 32-core machine with 128 GB RAM can serve
 **5,000–10,000 simple requests/second**. Twitter ran on a monolith for years. But growth breaks single machines in
 predictable ways:
 
 - **Compute saturates.** CPU-bound endpoints (feed ranking, image resizing) hit 100% utilization and p99 latency explodes from 50 ms to multiple seconds.
-- **Memory runs out.** Working sets that no longer fit in RAM spill to disk, and a 100 µs lookup becomes a 10 ms one — a **100× slowdown**.
+- **Memory runs out.** Working sets that no longer fit in RAM spill to disk, and a 100 µs lookup becomes a 10 ms one: a **100× slowdown**.
 - **A single machine is a single point of failure.** Hardware fails constantly at scale: with an annual disk failure rate of ~1–2%, a fleet of 10,000 disks loses several *every week*.
 
 **Scalability** is the property that adding resources yields proportional capacity. A system that doubles its servers
-but only gains 20% throughput doesn't scale — coordination overhead is eating the gains (this is Amdahl's law in
+but only gains 20% throughput doesn't scale. Coordination overhead is eating the gains (this is Amdahl's law in
 practice).
 
 > Interview tip: never say "we'll just add more servers." Say *what* you scale (stateless app tier), *what stops you*
@@ -37,7 +37,7 @@ practice).
       md: `
 #### Vertical scaling (scale up)
 
-Buy a bigger box. Zero code changes — your Postgres just gets 4× the RAM. AWS will happily rent you an
+Buy a bigger box. Zero code changes: your Postgres just gets 4× the RAM. AWS will happily rent you an
 \`u-24tb1.metal\` with **24 TB of RAM** for roughly **$200,000/month**. Costs grow super-linearly and there's a hard
 ceiling, but for databases it's often the right *first* move because it preserves single-node simplicity
 (transactions, joins, no distributed anything).
@@ -50,7 +50,7 @@ requests need routing, and data may need partitioning.
 
 The single most important enabler is a **stateless app tier**: any server can handle any request because session
 state lives in a shared store (Redis, signed cookies/JWTs) instead of server memory. Stateless servers are cattle,
-not pets — you can kill, clone, and autoscale them freely.
+not pets: you can kill, clone, and autoscale them freely.
 `,
     },
     {
@@ -59,11 +59,11 @@ not pets — you can kill, clone, and autoscale them freely.
       comparison: {
         columns: ['Criterion', 'Vertical (scale up)', 'Horizontal (scale out)'],
         rows: [
-          ['Effort to adopt', 'None — same architecture', 'High — LB, statelessness, possibly sharding'],
+          ['Effort to adopt', 'None; same architecture', 'High: LB, statelessness, possibly sharding'],
           ['Cost curve', 'Super-linear (2× capacity ≈ 3–4× price)', 'Roughly linear with node count'],
           ['Ceiling', '~24 TB RAM / 448 vCPUs (largest cloud instances)', 'Practically unbounded'],
-          ['Fault tolerance', 'None — one box, one blast radius', 'Survives individual node failures'],
-          ['Latency consistency', 'Excellent — no network hops between components', 'Needs care: cross-node calls add 0.5–2 ms each'],
+          ['Fault tolerance', 'None: one box, one blast radius', 'Survives individual node failures'],
+          ['Latency consistency', 'Excellent: no network hops between components', 'Needs care: cross-node calls add 0.5–2 ms each'],
           ['Best for', 'Databases early on, dev simplicity', 'Web/API tiers, anything stateless'],
         ],
         verdict:
@@ -80,10 +80,10 @@ not pets — you can kill, clone, and autoscale them freely.
           { id: 'users', label: 'Clients', kind: 'client', x: 30, y: 150, detail: 'Browsers and mobile apps. At 10M DAU making 20 requests/day each, expect ~2,300 QPS average and ~7,000 QPS at peak (3× factor).' },
           { id: 'lb', label: 'Load Balancer', kind: 'lb', x: 250, y: 150, detail: 'Distributes traffic across app servers (round-robin or least-connections). Health-checks every few seconds and ejects dead nodes. An AWS ALB handles millions of QPS and costs ~$20/month + $0.008/LCU-hour.' },
           { id: 'app1', label: 'App Server 1', kind: 'server', x: 490, y: 40, detail: 'Stateless: no session data in memory, so any server can serve any user. A typical 8-core node handles ~1,000 QPS of business logic.' },
-          { id: 'app2', label: 'App Server 2', kind: 'server', x: 490, y: 150, detail: 'Identical clone. Autoscaling adds/removes clones based on CPU or request depth — scale-out takes ~1–3 minutes on EC2, seconds on Lambda/Cloud Run.' },
+          { id: 'app2', label: 'App Server 2', kind: 'server', x: 490, y: 150, detail: 'Identical clone. Autoscaling adds/removes clones based on CPU or request depth. Scale-out takes ~1–3 minutes on EC2, seconds on Lambda/Cloud Run.' },
           { id: 'app3', label: 'App Server N', kind: 'server', x: 490, y: 260, detail: 'Capacity math: peak 7,000 QPS ÷ 1,000 QPS/server = 7 servers, +30% headroom → provision ~9.' },
           { id: 'cache', label: 'Redis Cache', kind: 'cache', x: 740, y: 60, detail: 'Shared session store + hot data cache. Sub-millisecond reads at 100K+ ops/sec per node. This is what lets app servers stay stateless.' },
-          { id: 'db', label: 'PostgreSQL', kind: 'db', x: 740, y: 240, detail: 'The stateful core — hardest part to scale. First move: bigger instance. Second: read replicas. Third: sharding. Covered in later modules.' },
+          { id: 'db', label: 'PostgreSQL', kind: 'db', x: 740, y: 240, detail: 'The stateful core, and the hardest part to scale. First move: bigger instance. Second: read replicas. Third: sharding. Covered in later modules.' },
         ],
         edges: [
           { from: 'users', to: 'lb', label: 'HTTPS' },
@@ -108,18 +108,18 @@ not pets — you can kill, clone, and autoscale them freely.
       md: `
 **Availability** is the fraction of time a system answers correctly. It's quoted in "nines":
 
-- **99% (two nines)** — 3.65 days down/year. Hobby projects.
-- **99.9% (three nines)** — 8.8 hours/year. Typical internal tooling SLA.
-- **99.99% (four nines)** — 52 minutes/year. Serious SaaS (Stripe, Slack target this publicly).
-- **99.999% (five nines)** — 5.3 minutes/year. Telecom-grade; requires automated failover everywhere, because a human can't even join the incident call in 5 minutes.
+- **99% (two nines)**: 3.65 days down/year. Hobby projects.
+- **99.9% (three nines)**: 8.8 hours/year. Typical internal tooling SLA.
+- **99.99% (four nines)**: 52 minutes/year. Serious SaaS (Stripe, Slack target this publicly).
+- **99.999% (five nines)**: 5.3 minutes/year. Telecom-grade; requires automated failover everywhere, because a human can't even join the incident call in 5 minutes.
 
 Two composition rules drive every HA design:
 
-1. **Serial components multiply.** A request that traverses LB → app → DB, each 99.9% available, yields 0.999³ ≈ **99.7%** — chains are weaker than their weakest link.
-2. **Redundant components compensate.** Two independent 99% replicas, where either can serve, give 1 − (0.01)² = **99.99%**. Redundancy buys nines cheaply — *if* failover is automatic.
+1. **Serial components multiply.** A request that traverses LB → app → DB, each 99.9% available, yields 0.999³ ≈ **99.7%**. Chains are weaker than their weakest link.
+2. **Redundant components compensate.** Two independent 99% replicas, where either can serve, give 1 − (0.01)² = **99.99%**. Redundancy buys nines cheaply, *if* failover is automatic.
 
 This is why real systems deploy across **multiple availability zones** (independent power/network within a region,
-<2 ms apart) and sometimes multiple regions (independent geography, 50–150 ms apart) — and why an SLA is only as
+<2 ms apart) and sometimes multiple regions (independent geography, 50–150 ms apart). It is also why an SLA is only as
 credible as its failover automation.
 `,
     },
@@ -128,7 +128,7 @@ credible as its failover automation.
       title: 'Latency numbers every engineer should know',
       numbers: [
         { metric: 'L1 cache reference', value: '0.5 ns', context: 'The baseline everything else is measured against.' },
-        { metric: 'RAM access', value: '100 ns', context: 'Reading from memory — 200× slower than L1.' },
+        { metric: 'RAM access', value: '100 ns', context: 'Reading from memory: 200× slower than L1.' },
         { metric: 'SSD random read', value: '~100 µs', context: '1,000× slower than RAM. Why caches exist.' },
         { metric: 'Same-DC network round trip', value: '~0.5 ms', context: 'Every microservice hop pays this.' },
         { metric: 'Cross-continent round trip', value: '~150 ms', context: 'US ↔ Europe. Why CDNs and regions exist.' },
@@ -144,14 +144,14 @@ propagate, so the answer is a design choice.
 
 The **CAP theorem** (Brewer, 2000): when a network **P**artition splits your replicas, you must choose between
 **C**onsistency (refuse requests that might return stale data) and **A**vailability (answer everyone, possibly
-stale). You cannot have both *during the partition* — and partitions are a fact of life, so the choice is mandatory.
+stale). You cannot have both *during the partition*, and partitions are a fact of life, so the choice is mandatory.
 
 - **CP systems** (ZooKeeper, etcd, Spanner, HBase): the minority side of a partition stops serving. Correctness over uptime. Use for money, locks, leader election.
 - **AP systems** (Cassandra, DynamoDB defaults, DNS): every node keeps answering; conflicts get reconciled later. Uptime over freshness. Use for feeds, counters, carts.
 
 In practice the more useful framing is **PACELC**: if Partitioned, trade Availability vs Consistency; **E**lse, trade
 **L**atency vs **C**onsistency. Even with zero failures, synchronous replication to a quorum costs you milliseconds on
-every write — Spanner pays ~10 ms commit latency for global strong consistency, while DynamoDB answers eventually
+every write: Spanner pays ~10 ms commit latency for global strong consistency, while DynamoDB answers eventually
 consistent reads in ~1–2 ms.
 
 Most large systems mix models per data type: strongly consistent for balances and inventory, eventually consistent
@@ -184,7 +184,7 @@ for like counts and presence. Saying *that sentence* in an interview is worth mo
       title: 'Capacity estimation cheat-sheet (interview-ready)',
       language: 'python',
       code: `
-# Back-of-the-envelope template — memorize the flow, not the numbers
+# Back-of-the-envelope template: memorize the flow, not the numbers
 DAU = 10_000_000          # daily active users
 req_per_user = 20         # requests per user per day
 peak_factor = 3           # peak traffic vs average
@@ -211,7 +211,7 @@ storage = 1e6 * 100e3 * 3 * 365 * 5          # ~547 TB
       options: ['99.9%', '~99.7%', '99.97%', '~98%'],
       answer: 1,
       explanation:
-        'Serial dependencies multiply: 0.999 × 0.999 × 0.999 ≈ 0.997. Chaining components always lowers availability — redundancy within each tier is how you win it back.',
+        'Serial dependencies multiply: 0.999 × 0.999 × 0.999 ≈ 0.997. Chaining components always lowers availability, and redundancy within each tier is how you win it back.',
     },
     {
       question: 'Which change is the prerequisite for horizontally scaling a web tier?',
@@ -242,7 +242,7 @@ storage = 1e6 * 100e3 * 3 * 365 * 5          # ~547 TB
       options: ['8.8 hours', '52 minutes', '5 minutes', '3.65 days'],
       answer: 1,
       explanation:
-        'Four nines ≈ 52.6 minutes/year (0.01% of 525,600 minutes). Each extra nine cuts allowed downtime by 10× — and roughly 10×es the engineering cost.',
+        'Four nines ≈ 52.6 minutes/year (0.01% of 525,600 minutes). Each extra nine cuts allowed downtime by 10×, and roughly 10×es the engineering cost.',
     },
     {
       question: 'A startup\'s Postgres is CPU-bound at 80% with 500 QPS of mixed traffic. The cheapest sound *first* step is:',
@@ -260,12 +260,12 @@ storage = 1e6 * 100e3 * 3 * 365 * 5          # ~547 TB
   interviewQuestions: [
     {
       question: 'How would you scale a web application from 1,000 to 10 million users?',
-      hint: 'Walk through stages: single server → separate DB → stateless app tier + LB → cache → read replicas → CDN → sharding/queues. At each stage name the bottleneck that forces the next step and give rough QPS numbers.',
+      hint: 'Walk through stages: single server, separate DB, stateless app tier + LB, cache, read replicas, CDN, then sharding/queues. At each stage name the bottleneck that forces the next step and give rough QPS numbers.',
       difficulty: 'Junior',
     },
     {
       question: 'Your SLA is 99.99% but your single-region deployment was down 40 minutes last month. What do you change?',
-      hint: 'Discuss multi-AZ redundancy, automated health-check-driven failover, removing serial single points of failure, and error budgets. Note that 40 min/month ≈ 99.9% — a full nine short.',
+      hint: 'Discuss multi-AZ redundancy, automated health-check-driven failover, removing serial single points of failure, and error budgets. Note that 40 min/month ≈ 99.9%, a full nine short.',
       difficulty: 'Mid',
     },
     {
@@ -275,16 +275,16 @@ storage = 1e6 * 100e3 * 3 * 365 * 5          # ~547 TB
     },
     {
       question: 'Design a 5-nines service. What does the last nine actually cost you?',
-      hint: 'Five nines = 5.3 min/year — beyond human reaction time. Requires N+2 redundancy, multi-region active-active, automated failover tested via chaos engineering, deploy strategies with instant rollback. Engineering cost grows ~10× per nine.',
+      hint: 'Five nines = 5.3 min/year, beyond human reaction time. Requires N+2 redundancy, multi-region active-active, automated failover tested via chaos engineering, deploy strategies with instant rollback. Engineering cost grows ~10× per nine.',
       difficulty: 'Senior',
     },
   ],
   commonMistakes: [
     '"Just add more servers" without identifying whether the bottleneck is the stateless tier (easy) or the database (hard). Interviewers probe exactly this.',
-    'Quoting the CAP theorem as "pick 2 of 3". Partitions aren\'t optional — the real choice is C vs A during a partition, and latency vs consistency the rest of the time (PACELC).',
+    'Quoting the CAP theorem as "pick 2 of 3". Partitions aren\'t optional. The real choice is C vs A during a partition, and latency vs consistency the rest of the time (PACELC).',
     'Designing for 100× scale on day one. Premature sharding adds operational pain for years; design so you *can* shard, don\'t shard now.',
     'Forgetting the peak-to-average factor. Provisioning for average QPS means falling over every evening; 2–5× peaking is normal, 10×+ for spiky events.',
-    'Treating availability as a property of servers rather than of the whole chain — one 99% dependency caps your 99.99% service.',
+    'Treating availability as a property of servers rather than of the whole chain: one 99% dependency caps your 99.99% service.',
   ],
   cloudMappings: [
     { concept: 'Managed load balancer', aws: 'ALB / NLB', gcp: 'Cloud Load Balancing', azure: 'Azure Load Balancer / App Gateway' },

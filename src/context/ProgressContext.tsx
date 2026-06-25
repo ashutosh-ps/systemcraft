@@ -24,7 +24,7 @@ function load(): ProgressState {
       return { completed: parsed.completed ?? {}, quizScores: parsed.quizScores ?? {} }
     }
   } catch {
-    // corrupted storage — start fresh
+    // corrupted storage. Start fresh
   }
   return { completed: {}, quizScores: {} }
 }
@@ -45,7 +45,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
     } catch {
-      // storage unavailable — progress just won't persist
+      // storage unavailable. Progress just won't persist
     }
   }, [state])
 

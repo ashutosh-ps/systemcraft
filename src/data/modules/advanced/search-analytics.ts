@@ -15,7 +15,7 @@ const searchAnalytics: Module = {
       type: 'text',
       title: "Why your database can't do search",
       md: `
-Run \`SELECT * FROM products WHERE description LIKE '%wireless%'\` on a 10M-row table and Postgres scans **every row** —
+Run \`SELECT * FROM products WHERE description LIKE '%wireless%'\` on a 10M-row table and Postgres scans **every row**:
 a leading wildcard defeats B-tree indexes entirely. On a typical instance that's a 5–30 second query. Users expect
 search results in **under 200 ms**, with typo tolerance, relevance ranking, and "did you mean".
 
@@ -25,16 +25,16 @@ The fix is a different data structure: the **inverted index**. Instead of mappin
 - \`wireless\` → [doc 4, doc 87, doc 1042, ...]
 - \`headphones\` → [doc 4, doc 19, doc 87, ...]
 
-A query for "wireless headphones" becomes two postings-list lookups plus an intersection — **O(terms)**, not O(rows).
+A query for "wireless headphones" becomes two postings-list lookups plus an intersection: **O(terms)**, not O(rows).
 This is the same trick as the index at the back of a textbook, and it's how Google answers queries over hundreds of
 billions of pages in ~400 ms.
 
 Before text reaches the index it passes through an **analysis pipeline**:
 
-1. **Tokenization** — split on whitespace/punctuation: "Wireless-Headphones!" → [wireless, headphones]
-2. **Lowercasing** — so "iPhone" matches "iphone"
-3. **Stop-word removal** (optional) — drop "the", "a", "of"
-4. **Stemming** — "running", "runs" → "run", so morphology doesn't break recall
+1. **Tokenization**, splitting on whitespace/punctuation: "Wireless-Headphones!" → [wireless, headphones]
+2. **Lowercasing**, so "iPhone" matches "iphone"
+3. **Stop-word removal** (optional), dropping "the", "a", "of"
+4. **Stemming**: "running", "runs" → "run", so morphology doesn't break recall
 
 > The #1 source of "search returns nothing" bugs: the query is analyzed differently than the indexed text. Same
 > analyzer at index time and query time, always.
@@ -81,17 +81,17 @@ def search(query):
 Elasticsearch is a distributed wrapper around **Lucene**, the Java library that implements inverted indexes. The key
 units:
 
-- An **index** (think: table) is split into **primary shards** — each shard is a full Lucene index. Shard count is
+- An **index** (think: table) is split into **primary shards**. Each shard is a full Lucene index. Shard count is
   fixed at creation; the working rule is **10–50 GB per shard**. A 500 GB catalog → ~15 primaries.
 - Each primary has **replicas** (default 1) for HA and extra read throughput. Replicas serve queries too, so 1 replica
   ≈ 2× read capacity.
-- A query fans out to one copy of every shard, each returns its top-k, and the coordinating node merges — this is
+- A query fans out to one copy of every shard, each returns its top-k, and the coordinating node merges. This is
   **scatter-gather**, which is why oversharding (thousands of tiny shards) murders latency.
 
 #### Near-real-time, not real-time
 
 Writes land in an in-memory buffer plus a durability translog. Documents become *searchable* only when a **refresh**
-flushes the buffer into a new Lucene segment — by default every **1 second**. So Elasticsearch is "near-real-time":
+flushes the buffer into a new Lucene segment, by default every **1 second**. So Elasticsearch is "near-real-time":
 index a document, and for up to ~1 s a search won't find it. Bulk-loading pipelines often raise
 \`refresh_interval\` to 30 s for 2–5× indexing throughput.
 
@@ -116,7 +116,7 @@ Matching documents is the easy half. Search lives or dies on **ranking**. The cl
 - **Inverse document frequency (IDF):** a term that appears in *every* document ("the", "click") carries no signal; a
   rare term ("debezium") carries a lot. Score = TF × IDF.
 
-**BM25** — the default in Elasticsearch, OpenSearch, and most modern engines — keeps the idea and fixes two failure
+**BM25**, the default in Elasticsearch, OpenSearch, and most modern engines, keeps the idea and fixes two failure
 modes, in plain words:
 
 1. **Term-frequency saturation.** In TF-IDF, 100 occurrences score ~10× more than 10 occurrences, which rewards
@@ -128,12 +128,12 @@ modes, in plain words:
 
 In production, BM25 is the *first stage*. Real systems add layers on top:
 
-- **Field boosting** — a match in \`title\` worth 3× a match in \`body\`.
-- **Function scores** — blend in recency, popularity, price.
-- **Semantic reranking** — embed query and top-200 BM25 candidates with a vector model, rerank by cosine similarity.
+- **Field boosting**: a match in \`title\` worth 3× a match in \`body\`.
+- **Function scores** blend in recency, popularity, price.
+- **Semantic reranking**: embed query and top-200 BM25 candidates with a vector model, rerank by cosine similarity.
   Hybrid BM25 + vectors is the 2025 default for serious search.
 
-> Interview-ready one-liner: "BM25 is TF-IDF with saturation and length normalization — then we rerank the top
+> Interview-ready one-liner: "BM25 is TF-IDF with saturation and length normalization, then we rerank the top
 > candidates with business signals."
 `,
     },
@@ -144,14 +144,14 @@ In production, BM25 is the *first stage*. Real systems add layers on top:
         columns: ['Criterion', 'Elasticsearch / OpenSearch', 'Postgres full-text', 'Algolia (SaaS)'],
         rows: [
           ['Typical query latency', '10–100 ms p99 at scale', '50–500 ms; degrades past ~10M rows', '1–20 ms (edge-distributed)'],
-          ['Operational cost', 'High — cluster sizing, shard management, JVM tuning', 'Zero extra infra — it is your DB', 'Zero ops, but ~$0.50 per 1K searches adds up fast'],
+          ['Operational cost', 'High: cluster sizing, shard management, JVM tuning', 'Zero extra infra; it is your DB', 'Zero ops, but ~$0.50 per 1K searches adds up fast'],
           ['Relevance tooling', 'BM25 + function scores + vectors; fully tunable', 'Basic ts_rank; no BM25, weak typo tolerance', 'Excellent out of the box: typo tolerance, synonyms, A/B'],
-          ['Data freshness', '~1 s (refresh interval)', 'Transactional — instant', 'Seconds (push via API)'],
+          ['Data freshness', '~1 s (refresh interval)', 'Transactional, instant', 'Seconds (push via API)'],
           ['Scale ceiling', 'Petabytes (log analytics at Uber, Netflix)', '~10–50 GB of indexed text before pain', '~100s of GB; priced per record'],
           ['Consistency with source', 'Eventually consistent; needs a sync pipeline', 'Always consistent', 'Eventually consistent; needs a sync pipeline'],
         ],
         verdict:
-          'Start with Postgres tsvector + a GIN index — it is free and transactional. Move to Elasticsearch when relevance tuning or scale demands it. Buy Algolia when search UX matters more than cost and your catalog is modest.',
+          'Start with Postgres tsvector + a GIN index: it is free and transactional. Move to Elasticsearch when relevance tuning or scale demands it. Buy Algolia when search UX matters more than cost and your catalog is modest.',
       },
     },
     {
@@ -198,11 +198,11 @@ In production, BM25 is the *first stage*. Real systems add layers on top:
       type: 'text',
       title: 'OLTP vs OLAP: rows vs columns',
       md: `
-Your application database is **OLTP** (online transaction processing): millions of tiny operations — fetch user 42,
-update one order — each touching a handful of rows but *all* of their columns. Row-oriented storage is perfect: a
+Your application database is **OLTP** (online transaction processing): millions of tiny operations (fetch user 42,
+update one order), each touching a handful of rows but *all* of their columns. Row-oriented storage is perfect: a
 row's bytes sit together, one disk read fetches the whole record.
 
-Analytics is the opposite shape. **OLAP** queries — "average order value by country for the last 90 days" — touch
+Analytics is the opposite shape. **OLAP** queries, like "average order value by country for the last 90 days", touch
 **millions of rows but 3 columns out of 60**. On a row store you read all 60 columns off disk to use 3, wasting ~95%
 of your I/O. Worse, that scan competes with production traffic; many an outage report begins "an analyst ran a
 query…".
@@ -210,7 +210,7 @@ query…".
 **Columnar storage** flips the layout: all values of \`country\` stored together, all of \`order_total\` together.
 Two compounding wins:
 
-1. **You read only the columns you need** — 3/60 columns ≈ 20× less I/O before any other trick.
+1. **You read only the columns you need**: 3/60 columns ≈ 20× less I/O before any other trick.
 2. **Columns compress absurdly well**, because similar values sit adjacent. A country column with 200 distinct values
    dictionary-encodes to ~1 byte/value; sorted timestamps delta-encode to near nothing. **5–10× compression** is
    routine (Parquet, Snowflake micro-partitions), vs ~2× for row stores.
@@ -218,7 +218,7 @@ Two compounding wins:
 Add **vectorized execution** (process values in CPU-cache-sized batches) and column min/max metadata for partition
 pruning, and the same query runs **100–1000× faster** than on the OLTP copy.
 
-The trade: appends are fine, but single-row updates and point lookups are slow. That's fine — that's what the OLTP
+The trade: appends are fine, but single-row updates and point lookups are slow. That's fine. That's what the OLTP
 side is for. Every serious architecture runs both and ships data between them.
 `,
     },
@@ -228,7 +228,7 @@ side is for. Every serious architecture runs both and ships data between them.
       md: `
 How does data get from Postgres into the warehouse and search index *without* hammering production?
 
-**Change Data Capture (CDC)** tails the database's write-ahead log — the same stream replicas consume — and emits
+**Change Data Capture (CDC)** tails the database's write-ahead log (the same stream replicas consume) and emits
 every insert/update/delete as an event. **Debezium** (open source, runs on Kafka Connect) does this for
 Postgres/MySQL/Mongo with **sub-second lag** and near-zero load on the primary, because reading the WAL is sequential
 I/O the database already does.
@@ -239,17 +239,17 @@ independently; Kafka retains the stream (commonly 7 days) so a consumer that was
 
 #### Snowflake: separating storage from compute
 
-Classic warehouses (early Redshift) coupled storage and compute — to store more you bought more nodes, and one team's
+Classic warehouses (early Redshift) coupled storage and compute. To store more you bought more nodes, and one team's
 monster query starved everyone. **Snowflake's** architecture decouples them:
 
 - **Storage**: all data lives in object storage (S3/GCS) as compressed, columnar **micro-partitions** (~16 MB each),
-  billed at roughly **$23/TB/month** — basically S3 prices.
+  billed at roughly **$23/TB/month**, basically S3 prices.
 - **Compute**: stateless "virtual warehouses" (clusters) spin up in seconds, billed **per second** while running.
   An X-Small is 1 credit/hour (~$2–4 depending on edition).
 - Isolation for free: the BI team, the data scientists, and the nightly ETL each get their *own* warehouse hitting the
   *same* data. No copies, no contention.
 
-BigQuery reaches the same destination serverlessly: no clusters at all, you pay **$6.25 per TiB scanned** — which is
+BigQuery reaches the same destination serverlessly: no clusters at all, you pay **$6.25 per TiB scanned**, which is
 why partitioning and clustering your tables (scan less) is the #1 BigQuery cost lever.
 `,
     },
@@ -260,9 +260,9 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
         columns: ['Criterion', 'Snowflake', 'BigQuery', 'Redshift'],
         rows: [
           ['Pricing model', 'Per-second compute credits + ~$23/TB storage', 'On-demand $6.25/TiB scanned, or flat-rate slots', 'Provisioned nodes (RA3) or Serverless RPUs'],
-          ['Ops burden', 'Low — pick warehouse sizes', 'None — fully serverless', 'Moderate — sizing, WLM queues, vacuum (less on RA3)'],
-          ['Compute isolation', 'Excellent — per-team virtual warehouses', 'Good — slot reservations', 'Weaker — workloads share the cluster'],
-          ['Cost predictability', 'Good (credits are visible)', 'Risky on-demand — one SELECT * over 100 TB = $625', 'Most predictable (fixed cluster)'],
+          ['Ops burden', 'Low: pick warehouse sizes', 'None: fully serverless', 'Moderate: sizing, WLM queues, vacuum (less on RA3)'],
+          ['Compute isolation', 'Excellent: per-team virtual warehouses', 'Good: slot reservations', 'Weaker: workloads share the cluster'],
+          ['Cost predictability', 'Good (credits are visible)', 'Risky on-demand; one SELECT * over 100 TB = $625', 'Most predictable (fixed cluster)'],
           ['Ecosystem gravity', 'Cloud-neutral (AWS/GCP/Azure)', 'Deep GCP integration, free batch loads', 'Deep AWS integration (S3, Glue, IAM)'],
           ['Sweet spot', 'Multi-team analytics, data sharing', 'Spiky/exploratory workloads, GCP shops', 'Steady 24/7 workloads, AWS-committed orgs'],
         ],
@@ -285,7 +285,7 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
             x: 20,
             y: 182,
             detail:
-              'Source of truth. Handles ~5,000 transactional QPS. Analytics and search never query it directly — the WAL is the only export interface.',
+              'Source of truth. Handles ~5,000 transactional QPS. Analytics and search never query it directly; the WAL is the only export interface.',
           },
           {
             id: 'cdc',
@@ -357,11 +357,11 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
       title: 'Numbers to anchor your design',
       numbers: [
         { metric: 'Elasticsearch query latency', value: '10–100 ms p99', context: 'Well-sized cluster; scatter-gather across shards sets the floor.' },
-        { metric: 'ES refresh interval', value: '1 s (default)', context: 'New documents are invisible to search until refresh — "near-real-time".' },
+        { metric: 'ES refresh interval', value: '1 s (default)', context: 'New documents are invisible to search until refresh, hence "near-real-time".' },
         { metric: 'Healthy shard size', value: '10–50 GB', context: 'Bigger shards recover slowly; thousands of tiny shards wreck the coordinator.' },
         { metric: 'Columnar compression', value: '5–10×', context: 'Dictionary + delta encoding on adjacent similar values. Row stores manage ~2×.' },
         { metric: 'BigQuery on-demand price', value: '$6.25/TiB scanned', context: 'A careless SELECT * over 100 TB costs $625. Partition and cluster your tables.' },
-        { metric: 'Snowflake storage', value: '~$23/TB/month', context: 'Object-storage prices — storage and compute scale (and bill) independently.' },
+        { metric: 'Snowflake storage', value: '~$23/TB/month', context: 'Object-storage prices: storage and compute scale (and bill) independently.' },
         { metric: 'CDC replication lag', value: '<1 s typical', context: 'Debezium tailing the WAL. Search/warehouse stay seconds behind the OLTP truth.' },
       ],
     },
@@ -389,7 +389,7 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
       ],
       answer: 0,
       explanation:
-        'Elasticsearch is near-real-time: writes become searchable on the next refresh (default every 1 s). The write is durable in the translog — it just is not visible yet.',
+        'Elasticsearch is near-real-time: writes become searchable on the next refresh (default every 1 s). The write is durable in the translog; it just is not visible yet.',
     },
     {
       question: 'BM25 improves on raw TF-IDF primarily by adding…',
@@ -408,7 +408,7 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
       options: ['About the same', '~20× less', '~2× less', '~1000× less'],
       answer: 1,
       explanation:
-        'A row store must read all 60 columns to access 3; columnar reads only the 3 needed — 3/60 = 20× less I/O. Compression (5–10×) then multiplies the win.',
+        'A row store must read all 60 columns to access 3; columnar reads only the 3 needed: 3/60 = 20× less I/O. Compression (5–10×) then multiplies the win.',
     },
     {
       question: 'What is the main architectural idea behind Snowflake that early Redshift lacked?',
@@ -420,7 +420,7 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
       ],
       answer: 2,
       explanation:
-        'Columnar storage was already standard. Snowflake put all data in object storage and made compute stateless and elastic — so teams get isolated warehouses over shared data and pay only while querying.',
+        'Columnar storage was already standard. Snowflake put all data in object storage and made compute stateless and elastic, so teams get isolated warehouses over shared data and pay only while querying.',
     },
   ],
   interviewQuestions: [
@@ -436,7 +436,7 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
     },
     {
       question: 'You need to change the analyzer on a 2 TB Elasticsearch index with zero downtime. How?',
-      hint: 'Analyzers are fixed per field — you must reindex. Expected structure: create new index with the new mapping, dual-write (or replay CDC stream) while backfilling via _reindex, verify counts/sampled relevance, then atomically flip an index alias. Discuss handling writes during backfill and rollback.',
+      hint: 'Analyzers are fixed per field, so you must reindex. Expected structure: create new index with the new mapping, dual-write (or replay CDC stream) while backfilling via _reindex, verify counts/sampled relevance, then atomically flip an index alias. Discuss handling writes during backfill and rollback.',
       difficulty: 'Senior',
     },
     {
@@ -446,11 +446,11 @@ why partitioning and clustering your tables (scan less) is the #1 BigQuery cost 
     },
   ],
   commonMistakes: [
-    'Using Elasticsearch as the primary datastore. No transactions, near-real-time visibility, and historically rough partition behavior — keep the source of truth in a database and treat ES as a rebuildable derived view.',
+    'Using Elasticsearch as the primary datastore. No transactions, near-real-time visibility, and historically rough partition behavior: keep the source of truth in a database and treat ES as a rebuildable derived view.',
     'Dual-writing to Postgres and Elasticsearch from application code. The two stores silently diverge on partial failures; CDC from the WAL gives you ordering and replay for free.',
     'Oversharding. 5,000 shards of 200 MB each turns every query into a 5,000-way scatter-gather. Target 10–50 GB per shard and count shards per node in the low hundreds at most.',
     'Running analytics on the OLTP database "because the data is already there". One analyst scan evicts your buffer cache and your p99 doubles. Ship data to a columnar store; freshness of minutes is almost always acceptable.',
-    'Ignoring scan-based pricing. SELECT * in BigQuery bills every column of every partition touched — $6.25/TiB. Select needed columns, partition by date, cluster by common filters.',
+    'Ignoring scan-based pricing. SELECT * in BigQuery bills every column of every partition touched, at $6.25/TiB. Select needed columns, partition by date, cluster by common filters.',
   ],
   cloudMappings: [
     { concept: 'Managed search engine', aws: 'OpenSearch Service', gcp: 'Elastic Cloud (Marketplace) / Vertex AI Search', azure: 'Azure AI Search' },

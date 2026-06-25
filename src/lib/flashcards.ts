@@ -1,7 +1,7 @@
 import type { Difficulty, Module } from './types'
 
 /**
- * Auto-derives a flashcard deck from a module's existing content — no separate
+ * Auto-derives a flashcard deck from a module's existing content. No separate
  * authoring needed. Cards come from four high-signal sources:
  *  - keyNumbers   → "recall the number" cards
  *  - comparison   → "rule of thumb" trade-off cards (when a verdict exists)
@@ -47,7 +47,7 @@ export function moduleToFlashcards(mod: Module): Flashcard[] {
           id: `${mod.id}:number:${si}:${i}`,
           kind: 'number',
           front: n.metric,
-          back: `${n.value} — ${n.context}`,
+          back: `${n.value}. ${n.context}`,
         })
       })
     } else if (section.type === 'comparison' && section.comparison.verdict) {
@@ -55,7 +55,7 @@ export function moduleToFlashcards(mod: Module): Flashcard[] {
       cards.push({
         id: `${mod.id}:tradeoff:${si}`,
         kind: 'tradeoff',
-        front: `Rule of thumb — ${topic}?`,
+        front: `${topic}?`,
         back: section.comparison.verdict,
       })
     }
@@ -65,7 +65,7 @@ export function moduleToFlashcards(mod: Module): Flashcard[] {
     cards.push({
       id: `${mod.id}:pitfall:${i}`,
       kind: 'pitfall',
-      front: `Why is this a mistake — "${leadWords(m)}"`,
+      front: `Why is this a mistake: "${leadWords(m)}"`,
       back: m,
     })
   })

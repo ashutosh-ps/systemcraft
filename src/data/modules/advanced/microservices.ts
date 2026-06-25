@@ -5,7 +5,7 @@ const microservices: Module = {
   category: 'advanced',
   title: 'Microservices Patterns',
   description:
-    'When to split a monolith, where to draw service boundaries, and the patterns — sagas, circuit breakers, service mesh, strangler fig — that keep a distributed system from eating you alive.',
+    'When to split a monolith, where to draw service boundaries, and the patterns (sagas, circuit breakers, service mesh, strangler fig) that keep a distributed system from eating you alive.',
   difficulty: 'Senior',
   estMinutes: 150,
   keywords: ['saga', 'circuit breaker', 'service mesh', 'domain-driven design', 'strangler fig', 'bulkhead', 'sidecar', 'API gateway'],
@@ -18,7 +18,7 @@ const microservices: Module = {
 The most senior thing you can say in a microservices interview is: **"I'd start with a monolith."**
 
 Microservices solve an *organizational* scaling problem, not a performance one. A well-built monolith on modern
-hardware serves tens of thousands of QPS — Shopify handles **Black Friday peaks of ~1M requests/minute** on a
+hardware serves tens of thousands of QPS. Shopify handles **Black Friday peaks of ~1M requests/minute** on a
 (modular) Rails monolith, and Stack Overflow served its entire global traffic from **9 web servers**. Function calls
 are ~1,000× faster than network calls: an in-process call costs nanoseconds; a same-DC RPC costs **0.5–2 ms** plus
 serialization.
@@ -29,13 +29,13 @@ What actually breaks at scale is the **organization**:
 - **Coupled scaling.** Image processing needs 64 GB RAM boxes; the checkout path needs 200 of something cheap. A monolith forces one shape on both.
 - **Coupled risk.** A memory leak in the recommendations code OOM-kills checkout.
 
-Microservices buy you **independent deploys, independent scaling, and independent failure domains** — at the price of
+Microservices buy you **independent deploys, independent scaling, and independent failure domains**, at the price of
 distributed transactions, network failure modes, and an observability bill. Segment famously split into ~140 services,
 drowned in operational overhead, and **merged back into a monolith** in 2017. Netflix runs **~1,000 microservices**
-successfully — with hundreds of platform engineers making that possible.
+successfully, with hundreds of platform engineers making that possible.
 
 > Rule of thumb: below ~20 engineers, a modular monolith with clean internal boundaries beats microservices on almost
-> every axis. Split when team coordination — not CPU — is your bottleneck.
+> every axis. Split when team coordination, not CPU, is your bottleneck.
 `,
     },
     {
@@ -47,13 +47,13 @@ successfully — with hundreds of platform engineers making that possible.
           ['Deploy frequency', 'Whole app per release; teams queue behind one pipeline', 'Per-service; elite DORA teams deploy on demand, multiple times/day'],
           ['Latency between modules', 'In-process call: ~nanoseconds', 'Network hop: 0.5–2 ms + serialization, per hop'],
           ['Data consistency', 'One DB, ACID transactions, joins for free', 'Distributed: sagas, eventual consistency, no cross-service joins'],
-          ['Failure blast radius', 'One bug can take down everything', 'Isolated — if you add circuit breakers and bulkheads'],
+          ['Failure blast radius', 'One bug can take down everything', 'Isolated, if you add circuit breakers and bulkheads'],
           ['Scaling granularity', 'Scale the whole app even if 1 module is hot', 'Scale only the hot service (e.g., 200 checkout pods, 4 admin pods)'],
           ['Operational cost', 'One pipeline, one runbook, one on-call', 'N pipelines, service mesh, tracing, platform team (Netflix: hundreds of platform engineers)'],
           ['Team autonomy', 'Shared codebase, merge conflicts at 50+ engineers', 'Team owns service end-to-end ("you build it, you run it")'],
         ],
         verdict:
-          'Monolith until org pain (not perf pain) forces the split — then extract the highest-churn, most independent domains first.',
+          'Monolith until org pain (not perf pain) forces the split. Then extract the highest-churn, most independent domains first.',
       },
     },
     {
@@ -61,47 +61,47 @@ successfully — with hundreds of platform engineers making that possible.
       title: 'Service boundaries (DDD) and how services talk',
       md: `
 The #1 cause of microservice misery is **wrong boundaries**: split along the wrong line and every user action fans out
-across 5 services that must change in lockstep — a *distributed monolith*, all of the network costs with none of the
+across 5 services that must change in lockstep: a *distributed monolith*, all of the network costs with none of the
 autonomy. **Domain-driven design** gives you the knife: the unit of decomposition is the **bounded context**, a part
 of the business where a term means exactly one thing. "Order" means different things to checkout (a cart being paid),
-fulfillment (boxes to pack), and accounting (a ledger entry) — three contexts, three services, three models.
+fulfillment (boxes to pack), and accounting (a ledger entry): three contexts, three services, three models.
 
 Boundary heuristics:
 
 - **One service = one team** (Amazon's two-pizza rule, ≤8 people). A service co-owned by three teams isn't a boundary.
-- **Data ownership is exclusive** — each service owns its database; shared tables couple schemas and deploys invisibly.
+- **Data ownership is exclusive.** Each service owns its database; shared tables couple schemas and deploys invisibly.
 - **High cohesion inside, low chatter across.** If one request needs 6 cross-service calls, the boundary is wrong.
 
 Once split, every interaction picks one of two styles:
 
-- **Synchronous (REST/gRPC)** — caller blocks for the answer. Right when a human is waiting (checkout needs the payment result *now*). Costs compound: each hop adds **0.5–2 ms** plus failure probability — 5 chained services at 99.9% each yield at best **99.5%**, and deep sync chains are how p99s die.
-- **Asynchronous (events via Kafka/RabbitMQ)** — the producer emits \`OrderPlaced\` and moves on. You get temporal decoupling (a consumer can be down 5 minutes and loses nothing), spike buffering, and free fan-out; you pay in **eventual consistency** and harder debugging.
+- **Synchronous (REST/gRPC).** Caller blocks for the answer. Right when a human is waiting (checkout needs the payment result *now*). Costs compound: each hop adds **0.5–2 ms** plus failure probability, and 5 chained services at 99.9% each yield at best **99.5%**, so deep sync chains are how p99s die.
+- **Asynchronous (events via Kafka/RabbitMQ).** The producer emits \`OrderPlaced\` and moves on. You get temporal decoupling (a consumer can be down 5 minutes and loses nothing), spike buffering, and free fan-out; you pay in **eventual consistency** and harder debugging.
 
-> Default that holds up in interviews: sync for queries and user-facing commands, async for everything else — side
-> effects, notifications, replicating data into other services' read models.
+> Default that holds up in interviews: sync for queries and user-facing commands, async for everything else, such as
+> side effects, notifications, replicating data into other services' read models.
 `,
     },
     {
       type: 'text',
-      title: 'The distributed transaction problem → sagas',
+      title: 'The distributed transaction problem and sagas',
       md: `
-Place an order: reserve inventory, charge the card, create a shipment. In a monolith that's one ACID transaction —
+Place an order: reserve inventory, charge the card, create a shipment. In a monolith that's one ACID transaction:
 \`BEGIN ... COMMIT\`, done. Across three services with three databases, **there is no transaction**. Two-phase commit
 (2PC) technically exists, but it holds locks across the network while waiting on the slowest participant and turns the
-coordinator into an availability bottleneck — virtually no high-scale shop uses it for inter-service flows.
+coordinator into an availability bottleneck. Virtually no high-scale shop uses it for inter-service flows.
 
 The standard answer is the **saga**: break the operation into a sequence of *local* transactions, each committed
 independently, and define a **compensating action** for each step. If step 3 fails, you run the compensations for
-steps 2 and 1 in reverse — \`refund_payment\`, then \`release_inventory\`. Not a rollback (those committed states were
-briefly real and visible) — an *undo*.
+steps 2 and 1 in reverse: \`refund_payment\`, then \`release_inventory\`. Not a rollback (those committed states were
+briefly real and visible), but an *undo*.
 
 Two ways to coordinate a saga:
 
-- **Choreography**: no central brain. Each service reacts to events — payment hears \`OrderPlaced\` and emits \`PaymentCompleted\`; inventory hears that and emits \`InventoryReserved\`. Minimal coupling, but the workflow exists only implicitly, smeared across services.
+- **Choreography**: no central brain. Each service reacts to events: payment hears \`OrderPlaced\` and emits \`PaymentCompleted\`; inventory hears that and emits \`InventoryReserved\`. Minimal coupling, but the workflow exists only implicitly, smeared across services.
 - **Orchestration**: a coordinator (the order service, or a workflow engine like Temporal/AWS Step Functions) explicitly commands each step and tracks state. The flow is readable in one place; the orchestrator is one more thing to operate.
 
 Design rule that saves real money: order the steps so the **hardest-to-compensate step goes last**. Charging a card is
-easy to refund; shipping a package is not — ship last.
+easy to refund; shipping a package is not, so ship last.
 `,
     },
     {
@@ -110,12 +110,12 @@ easy to refund; shipping a package is not — ship last.
       comparison: {
         columns: ['Criterion', 'Choreography (events)', 'Orchestration (coordinator)'],
         rows: [
-          ['Coupling', 'Loose — services only know event schemas', 'Services coupled to the orchestrator\'s commands'],
-          ['Visibility of the flow', 'Implicit — reconstruct it from 5 consumers\' code', 'Explicit — one state machine you can read and diagram'],
+          ['Coupling', 'Loose: services only know event schemas', 'Services coupled to the orchestrator\'s commands'],
+          ['Visibility of the flow', 'Implicit: reconstruct it from 5 consumers\' code', 'Explicit: one state machine you can read and diagram'],
           ['Failure handling', 'Each service handles compensation triggers itself; easy to miss an edge', 'Centralized retries, timeouts, compensation logic'],
-          ['Single point of failure', 'None (broker aside)', 'Orchestrator — mitigate with durable state (Temporal persists every step)'],
+          ['Single point of failure', 'None (broker aside)', 'Orchestrator; mitigate with durable state (Temporal persists every step)'],
           ['Sweet spot', '2–4 steps, simple linear flows', '4+ steps, branching, human approval steps, money'],
-          ['Debugging "where is my order?"', 'Trace events across topics — painful without tracing', 'Query the orchestrator\'s state table directly'],
+          ['Debugging "where is my order?"', 'Trace events across topics, painful without tracing', 'Query the orchestrator\'s state table directly'],
         ],
         verdict:
           'Choreography for short, simple sagas; orchestration once the flow has 4+ steps or carries money. Many teams start choreographed and migrate the painful flows to Temporal.',
@@ -128,10 +128,10 @@ easy to refund; shipping a package is not — ship last.
 In a microservices system, **partial failure is the steady state**. With 100 services each at 99.9%, something is
 degraded essentially always. Four patterns keep local failures local:
 
-- **Timeouts — always, everywhere.** A missing timeout is an unbounded resource leak: threads pile up waiting on a dead dependency until *your* service falls over too. Set them from the callee's p99 (e.g., p99 = 80 ms → timeout 250 ms), not from hope.
-- **Retries — with budgets and jitter.** Retry only idempotent operations, cap at 2–3 attempts, use exponential backoff with jitter, and cap total retry traffic (a "retry budget", e.g. ≤10% extra load). Naive retries are how a 10% brownout becomes a 300% **retry storm** that finishes the victim off.
-- **Circuit breakers.** After N consecutive failures (or an error rate over ~50% in a window), stop calling the dependency entirely and fail fast for a cooldown (10–30 s), then probe with a few trial requests. Failing in 1 ms beats timing out in 250 ms — your threads stay free and the sick service gets room to recover.
-- **Bulkheads.** Partition resources per dependency — separate connection pools and concurrency limits — so a slow recommendations service can exhaust *its* 20 connections without touching the 50 reserved for payments.
+- **Timeouts, always, everywhere.** A missing timeout is an unbounded resource leak: threads pile up waiting on a dead dependency until *your* service falls over too. Set them from the callee's p99 (e.g., p99 = 80 ms gives a 250 ms timeout), not from hope.
+- **Retries, with budgets and jitter.** Retry only idempotent operations, cap at 2–3 attempts, use exponential backoff with jitter, and cap total retry traffic (a "retry budget", e.g. ≤10% extra load). Naive retries are how a 10% brownout becomes a 300% **retry storm** that finishes the victim off.
+- **Circuit breakers.** After N consecutive failures (or an error rate over ~50% in a window), stop calling the dependency entirely and fail fast for a cooldown (10–30 s), then probe with a few trial requests. Failing in 1 ms beats timing out in 250 ms: your threads stay free and the sick service gets room to recover.
+- **Bulkheads.** Partition resources per dependency, with separate connection pools and concurrency limits, so a slow recommendations service can exhaust *its* 20 connections without touching the 50 reserved for payments.
 
 These compose: bulkheads bound the damage, timeouts bound the wait, breakers stop the bleeding, and careful retries
 handle the transient blips. Netflix's Hystrix popularized the stack; today it usually lives in Resilience4j or in the
@@ -192,7 +192,7 @@ class CircuitBreaker:
       md: `
 With 50 services × 20 autoscaling pods each, "what's the IP of payments?" needs a real answer. **Service discovery**
 is a registry (Consul, etcd, or Kubernetes' built-in DNS + Endpoints) that healthy instances register with and callers
-query — in Kubernetes you just dial \`payments.checkout.svc.cluster.local\` and kube-proxy load-balances across live
+query. In Kubernetes you just dial \`payments.checkout.svc.cluster.local\` and kube-proxy load-balances across live
 pods.
 
 Then there's the cross-cutting stuff *every* service needs: mTLS, retries, timeouts, circuit breaking, traffic
@@ -222,12 +222,12 @@ per sidecar** at ~1,000 RPS. At 10 hops that's potentially 10–20 ms of pure me
           { id: 'gateway', label: 'API Gateway', kind: 'lb', x: 215, y: 220, detail: 'Single entry point: TLS termination, JWT auth, per-client rate limiting (e.g. 100 req/min), and routing to services. Kong/Envoy handles 10K+ QPS per node at <1 ms added latency.' },
           { id: 'orders', label: 'Order Service', kind: 'service', x: 410, y: 70, detail: 'Owns the order lifecycle and the orders DB. Writes the order in PENDING state and emits OrderPlaced to Kafka in one local transaction (outbox pattern), then returns 202 to the client in ~50 ms.' },
           { id: 'catalog', label: 'Catalog Service', kind: 'service', x: 410, y: 220, detail: 'Product data, read-heavy (100:1). Serves ~5K QPS from its own Postgres + Redis cache at p99 ~15 ms. Scaled independently: 30 pods vs orders\' 8.' },
-          { id: 'users', label: 'User Service', kind: 'service', x: 410, y: 370, detail: 'Profiles, addresses, auth. Owns its own DB — payments never reads user tables directly; it calls this API. Exclusive data ownership is what keeps boundaries real.' },
+          { id: 'users', label: 'User Service', kind: 'service', x: 410, y: 370, detail: 'Profiles, addresses, auth. Owns its own DB; payments never reads user tables directly; it calls this API. Exclusive data ownership is what keeps boundaries real.' },
           { id: 'kafka', label: 'Kafka', kind: 'queue', x: 610, y: 70, detail: 'Event backbone: OrderPlaced, PaymentCompleted, InventoryReserved topics. 3-broker cluster handles 100K+ events/sec; 7-day retention lets consumers replay after bugs.' },
           { id: 'saga', label: 'Saga Coordinator', kind: 'service', x: 610, y: 220, detail: 'Orchestrates the order saga: reserve inventory → charge payment → confirm order. Persists state per step (Temporal-style), so a crash mid-saga resumes instead of losing orders. On failure it runs compensations in reverse.' },
-          { id: 'payments', label: 'Payment Service', kind: 'service', x: 840, y: 70, detail: 'Wraps Stripe/Adyen. Idempotency keys on every charge so saga retries never double-bill. p99 ~800 ms (dominated by the external PSP), so it is called async — never on the synchronous checkout path.' },
+          { id: 'payments', label: 'Payment Service', kind: 'service', x: 840, y: 70, detail: 'Wraps Stripe/Adyen. Idempotency keys on every charge so saga retries never double-bill. p99 ~800 ms (dominated by the external PSP), so it is called async, never on the synchronous checkout path.' },
           { id: 'inventory', label: 'Inventory Svc', kind: 'service', x: 840, y: 220, detail: 'Reserves stock with a 15-minute TTL hold. Compensating action: release_reservation. Hardest-to-undo step (shipping) is sequenced last in the saga.' },
-          { id: 'ordersdb', label: 'Orders DB', kind: 'db', x: 610, y: 370, detail: 'Postgres owned exclusively by the order service — database-per-service. Other teams get data via events or the orders API, never via shared tables.' },
+          { id: 'ordersdb', label: 'Orders DB', kind: 'db', x: 610, y: 370, detail: 'Postgres owned exclusively by the order service: database-per-service. Other teams get data via events or the orders API, never via shared tables.' },
         ],
         edges: [
           { from: 'clients', to: 'gateway', label: 'HTTPS' },
@@ -249,21 +249,21 @@ per sidecar** at ~1,000 RPS. At 10 hops that's potentially 10–20 ms of pure me
       md: `
 #### "Which service broke?"
 
-A user reports a slow checkout. The request touched 8 services — which one was it? Without distributed tracing this
+A user reports a slow checkout. The request touched 8 services. Which one was it? Without distributed tracing this
 is a multi-team archaeology project. The fix is three pillars, wired in from day one:
 
-- **Distributed tracing** (OpenTelemetry → Jaeger/Tempo/Datadog): a trace ID is generated at the gateway and propagated through every hop, including Kafka messages. One waterfall view shows checkout spent 1,840 ms of its 2,000 ms inside inventory's DB query. Sample (1–10% of traffic) — tracing everything at 100K QPS is its own scaling problem.
-- **Metrics**: RED per service — **R**ate, **E**rrors, **D**uration (p50/p99) — on standard dashboards, with SLO-based alerts, not CPU-based ones.
+- **Distributed tracing** (OpenTelemetry → Jaeger/Tempo/Datadog): a trace ID is generated at the gateway and propagated through every hop, including Kafka messages. One waterfall view shows checkout spent 1,840 ms of its 2,000 ms inside inventory's DB query. Sample (1–10% of traffic); tracing everything at 100K QPS is its own scaling problem.
+- **Metrics**: RED per service (**R**ate, **E**rrors, **D**uration (p50/p99)) on standard dashboards, with SLO-based alerts, not CPU-based ones.
 - **Structured logs** with the trace ID in every line, so you can jump from a trace to the exact logs.
 
 #### Strangler fig: how you actually migrate
 
-Nobody rewrites a monolith big-bang — those projects run 2 years and get cancelled. The **strangler fig** pattern
+Nobody rewrites a monolith big-bang; those projects run 2 years and get cancelled. The **strangler fig** pattern
 (named for the vine that envelops a tree): put a routing layer (the API gateway) in front of the monolith, extract
-**one** capability at a time into a service, flip its routes — 1%, 10%, 100%, with instant rollback — and repeat.
+**one** capability at a time into a service, flip its routes (1%, 10%, 100%, with instant rollback), and repeat.
 The monolith shrinks until it's gone, or until what remains is fine as-is. Shopify, GitHub, and Airbnb all ran
 multi-year strangler migrations while shipping features the whole time. Extract first whatever changes most often or
-needs independent scaling; leave the stable core for last — or forever.
+needs independent scaling; leave the stable core for last, or forever.
 `,
     },
     {
@@ -309,7 +309,7 @@ needs independent scaling; leave the stable core for last — or forever.
       ],
       answer: 0,
       explanation:
-        'Saga steps are locally committed transactions — there is nothing to roll back. Each step defines a compensating action (refund, release), executed in reverse order. That is why hard-to-compensate steps like shipping go last.',
+        'Saga steps are locally committed transactions, so there is nothing to roll back. Each step defines a compensating action (refund, release), executed in reverse order. That is why hard-to-compensate steps like shipping go last.',
     },
     {
       question: 'Your service calls a dependency whose error rate just hit 80%. A circuit breaker in the OPEN state will…',
@@ -340,7 +340,7 @@ needs independent scaling; leave the stable core for last — or forever.
       ],
       answer: 3,
       explanation:
-        'Strangler fig migrates incrementally behind a routing layer — each extraction ships value and can be rolled back. Big-bang rewrites and shared databases are the two classic ways these migrations die.',
+        'Strangler fig migrates incrementally behind a routing layer: each extraction ships value and can be rolled back. Big-bang rewrites and shared databases are the two classic ways these migrations die.',
     },
   ],
   interviewQuestions: [
@@ -366,10 +366,10 @@ needs independent scaling; leave the stable core for last — or forever.
     },
   ],
   commonMistakes: [
-    'Proposing microservices for a performance problem. Network calls are ~1,000× slower than function calls — splitting a slow monolith usually makes it slower. Profile first.',
+    'Proposing microservices for a performance problem. Network calls are ~1,000× slower than function calls, so splitting a slow monolith usually makes it slower. Profile first.',
     'Building a distributed monolith: services that share a database or must deploy in lockstep. You pay all the costs of distribution and keep all the coupling.',
     'Sizing services by lines of code ("nano-services") instead of bounded contexts. 140 services for 40 engineers is how Segment ended up merging back into a monolith.',
-    'Retries without timeouts, jitter, or budgets — turning a 10% brownout into a self-inflicted retry storm that takes the dependency from degraded to dead.',
+    'Retries without timeouts, jitter, or budgets, turning a 10% brownout into a self-inflicted retry storm that takes the dependency from degraded to dead.',
     'Adopting a service mesh at 5 services "for the future." That is ~0.5–2 ms per hop and a sidecar fleet to operate, purchased years before the mTLS/polyglot problems it solves exist.',
   ],
   cloudMappings: [

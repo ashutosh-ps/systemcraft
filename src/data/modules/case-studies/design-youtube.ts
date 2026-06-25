@@ -13,7 +13,7 @@ const designYoutube: Module = {
   sections: [
     {
       type: 'text',
-      title: 'Step 1: Requirements — scope before you draw boxes',
+      title: 'Step 1: Requirements before you draw boxes',
       md: `
 Video platforms are three systems wearing one trenchcoat: an **upload/processing pipeline**, a **delivery network**,
 and a **metadata site**. Scope all three, then spend your depth on the first two.
@@ -26,26 +26,26 @@ and a **metadata site**. Scope all three, then spend your depth on the first two
 - **Metadata**: titles, descriptions, channels, thumbnails; search by title.
 - **Views & likes**: counted at billions/day scale.
 
-**Scope cuts to state explicitly**: comments and recommendations are their own systems — mention that comments are
+**Scope cuts to state explicitly**: comments and recommendations are their own systems. Mention that comments are
 a standard sharded-by-video discussion store and recommendations are an ML serving problem, then move on. Live
-streaming changes everything (latency budgets, no full-file transcode) — park it unless asked.
+streaming changes everything (latency budgets, no full-file transcode), so park it unless asked.
 
 **Non-functional requirements**
 
-- **Durability above all** for uploaded masters: a creator's source file is irreplaceable — 11 nines durability
+- **Durability above all** for uploaded masters: a creator's source file is irreplaceable, so 11 nines durability
   (object storage), never a single disk.
-- **Startup latency < 2 s**, rebuffer ratio < 0.5% — these correlate directly with watch time.
-- **Read:write asymmetry is extreme**: ~500 hours uploaded/minute vs ~1B+ hours watched/day — roughly a
+- **Startup latency < 2 s**, rebuffer ratio < 0.5%. These correlate directly with watch time.
+- **Read:write asymmetry is extreme**: ~500 hours uploaded/minute vs ~1B+ hours watched/day, roughly a
   **1 : 200 ratio of ingest to consumption**. Optimize delivery cost first; egress, not storage, dominates the bill.
 - Eventual consistency is fine almost everywhere: a view count that lags 30 s harms nobody.
 
-> Interview tip: say "writes are expensive but rare; reads are cheap but astronomical — so I'll make writes
+> Interview tip: say "writes are expensive but rare; reads are cheap but astronomical, so I'll make writes
 > asynchronous and reads cache-shaped" before drawing anything.
 `,
     },
     {
       type: 'code',
-      title: 'Step 2: Capacity estimation — storage is the headline number',
+      title: 'Step 2: Capacity estimation, storage is the headline number',
       language: 'python',
       code: `
 # --- Ingest ---
@@ -88,18 +88,18 @@ egress_tbps = watch_hours_per_day * 3600 * avg_stream_mbps / 86_400 / 1e6
     },
     {
       type: 'text',
-      title: 'Step 3: The core deep-dive — upload and transcoding pipeline',
+      title: 'Step 3: The core deep-dive on the upload and transcoding pipeline',
       md: `
 The pipeline is the heart of the design. Three rules make it work at 500 hours/minute:
 
 #### 1. Uploads are chunked and resumable
 A 10 GB upload over residential internet *will* be interrupted. The client splits the file into chunks
 (YouTube's resumable protocol uses ~8 MB+ chunks), uploads them in parallel, and on disconnect asks the server
-"how much do you have?" and resumes from that offset. Chunks land directly in object storage via signed URLs — the
+"how much do you have?" and resumes from that offset. Chunks land directly in object storage via signed URLs; the
 upload service orchestrates but never proxies bytes through itself.
 
 #### 2. Transcoding is an embarrassingly parallel DAG
-Never transcode a video as one job — a 4-hour 4K upload would take a day on one machine. Instead:
+Never transcode a video as one job: a 4-hour 4K upload would take a day on one machine. Instead:
 
 - **Split** the source into ~2–10 s segments aligned on keyframes (GOP boundaries).
 - **Fan out** segments to a worker pool via a queue: each (segment × rung) is an independent task, so a 1-hour video
@@ -126,12 +126,12 @@ you retries, backpressure, and priority lanes (a creator with 10M subscribers ju
         nodes: [
           { id: 'creator', label: 'Creator App', kind: 'client', x: 20, y: 200, detail: 'Splits the file into ~8 MB chunks, uploads in parallel over the resumable protocol, and resumes from the last acknowledged offset after a disconnect. A 10 GB upload completes in ~15 min on a 100 Mbps line.' },
           { id: 'upload', label: 'Upload Service', kind: 'service', x: 210, y: 200, detail: 'Issues signed URLs so chunks go straight to object storage (no bytes proxied), tracks received offsets, assembles/validates the master, then enqueues a transcode DAG and writes a draft metadata row.' },
-          { id: 'raw', label: 'Raw Masters', kind: 'storage', x: 400, y: 60, detail: 'Immutable source-of-truth bucket: ~2.5 PB/day of new masters at 11-nines durability. Lifecycle policy tiers masters to cold storage after the transcode succeeds — they are read once and kept forever.' },
-          { id: 'meta', label: 'Metadata DB', kind: 'db', x: 400, y: 200, detail: 'Video status, title, channel, rendition list, manifest pointers. Sharded MySQL/Vitess at YouTube scale — metadata is tiny (KBs/video) next to the video bytes but serves every page load.' },
+          { id: 'raw', label: 'Raw Masters', kind: 'storage', x: 400, y: 60, detail: 'Immutable source-of-truth bucket: ~2.5 PB/day of new masters at 11-nines durability. Lifecycle policy tiers masters to cold storage after the transcode succeeds; they are read once and kept forever.' },
+          { id: 'meta', label: 'Metadata DB', kind: 'db', x: 400, y: 200, detail: 'Video status, title, channel, rendition list, manifest pointers. Sharded MySQL/Vitess at YouTube scale; metadata is tiny (KBs/video) next to the video bytes but serves every page load.' },
           { id: 'queue', label: 'Transcode Queue', kind: 'queue', x: 400, y: 340, detail: 'Each (segment × rung) is one idempotent task: a 1-hour video fans out to ~4,800 tasks. Priority lanes let big-channel uploads and trending re-encodes jump ahead; dead-letter queue catches poison segments.' },
-          { id: 'workers', label: 'Transcode Wkrs', kind: 'server', x: 600, y: 340, detail: 'Autoscaled fleet (spot/preemptible friendly — tasks are retryable). Software x264/libvpx/SVT-AV1, or ASICs: YouTube’s Argos VCU encodes 20-33x faster per watt than CPUs. Output: fMP4/CMAF segments per rung.' },
+          { id: 'workers', label: 'Transcode Wkrs', kind: 'server', x: 600, y: 340, detail: 'Autoscaled fleet (spot/preemptible friendly, since tasks are retryable). Software x264/libvpx/SVT-AV1, or ASICs: YouTube’s Argos VCU encodes 20-33x faster per watt than CPUs. Output: fMP4/CMAF segments per rung.' },
           { id: 'abr', label: 'ABR Store', kind: 'storage', x: 600, y: 200, detail: 'Packaged HLS/DASH segments + manifests, addressed as videoId/rendition/segment_N.m4s. This bucket is the CDN origin; ~7-10 PB/day of new renditions land here.' },
-          { id: 'cdn', label: 'Multi-tier CDN', kind: 'cdn', x: 800, y: 200, detail: 'Edge PoPs (and ISP-embedded caches like Google Global Cache) serve 95%+ of bytes; misses go to regional shields, then origin. Origin offload >99% for popular content — origin egress is the cost to minimize.' },
+          { id: 'cdn', label: 'Multi-tier CDN', kind: 'cdn', x: 800, y: 200, detail: 'Edge PoPs (and ISP-embedded caches like Google Global Cache) serve 95%+ of bytes; misses go to regional shields, then origin. Origin offload >99% for popular content; origin egress is the cost to minimize.' },
           { id: 'viewer', label: 'Viewer Player', kind: 'client', x: 800, y: 60, detail: 'Fetches the manifest, then pulls 2-10 s segments, measuring throughput and buffer to pick the next rung. Startup target <2 s; rebuffer ratio target <0.5%.' },
         ],
         edges: [
@@ -149,18 +149,18 @@ you retries, backpressure, and priority lanes (a creator with 10M subscribers ju
     },
     {
       type: 'text',
-      title: 'Step 4: Adaptive bitrate streaming — how playback actually works',
+      title: 'Step 4: Adaptive bitrate streaming, how playback actually works',
       md: `
 Naive streaming serves one MP4 file and prays. Adaptive bitrate (ABR) is what makes video watchable on a train:
 
 - **The video is cut into segments** of ~2–10 s (YouTube uses ~5 s DASH segments), each encoded at every rung of
   the ladder: 144p/~100 kbps up to 2160p/~16 Mbps.
 - **A manifest** (HLS \`.m3u8\` or DASH \`.mpd\`) lists every rendition and the URL pattern for its segments. The
-  player downloads the manifest first — it's the menu.
+  player downloads the manifest first; it's the menu.
 - **The player is the brain.** It measures recent download throughput and current buffer depth, then picks the rung
   for the *next* segment: buffer healthy and throughput 2× the current rung → step up; buffer draining → step down
   *before* it empties. Switches land on segment boundaries, so the viewer sees a quality shift, never a stall.
-- **The server is dumb.** Every "stream" is just HTTP GETs of small immutable files — which is precisely what makes
+- **The server is dumb.** Every "stream" is just HTTP GETs of small immutable files, which is precisely what makes
   CDNs work: no sessions, no special protocol, infinite cacheability.
 
 Two refinements worth name-dropping:
@@ -172,36 +172,36 @@ Two refinements worth name-dropping:
    saves ~20% egress at the same visual quality.
 
 > The exam question behind ABR: *why segments instead of byte-range requests on one big file?* Because each segment
-> is an independently cacheable, independently encodable unit — the same property powers parallel transcode and CDN
+> is an independently cacheable, independently encodable unit, the same property that powers parallel transcode and CDN
 > efficiency.
 `,
     },
     {
       type: 'text',
-      title: 'Step 5: Delivery — multi-tier CDN and the long tail',
+      title: 'Step 5: Delivery via multi-tier CDN and the long tail',
       md: `
 At ~125 Tbps average egress, delivery is where the money goes. The architecture is a cache hierarchy:
 
-- **Edge PoPs** (hundreds, inside or near ISPs — Google Global Cache, Netflix Open Connect): serve the hot set.
+- **Edge PoPs** (hundreds, inside or near ISPs like Google Global Cache and Netflix Open Connect): serve the hot set.
   For popular videos, edge hit ratios run **90–95%+**; the head of the catalog is tiny relative to its traffic
-  share — roughly **1% of videos drive the majority of watch time**.
+  share, roughly **1% of videos drive the majority of watch time**.
 - **Regional shield / mid-tier caches** (tens): absorb edge misses so a newly-hot video is fetched from origin
-  *once per region*, not once per PoP. This is **origin shielding** — without it, a viral video triggers a
+  *once per region*, not once per PoP. This is **origin shielding**. Without it, a viral video triggers a
   thundering herd of thousands of identical origin fetches (use request coalescing here too).
 - **Origin** (object storage): serves the long tail and first-time fetches. Total origin offload should exceed
   **99% of bytes**.
 
 The **long-tail problem** is the part interviewers want you to acknowledge: most of the *catalog* is almost never
-watched. Caching it at the edge is pointless — it would evict hot content. So:
+watched. Caching it at the edge is pointless, since it would evict hot content. So:
 
 - Edges cache by **segment popularity**, not whole videos (everyone watches the first 30 s; far fewer finish).
 - Long-tail requests route straight to shield/origin; the viewer pays one extra 30–80 ms RTT, which the player's
   buffer hides completely.
-- Cold renditions (the AV1 ladder for a video with 12 views) may not exist at all — transcode the premium codec
+- Cold renditions (the AV1 ladder for a video with 12 views) may not exist at all. Transcode the premium codec
   ladder *lazily*, triggered by popularity thresholds.
 
 Egress economics drive everything: cloud CDN list price is ~$0.02–0.085/GB, negotiated volume deals reach
-~$0.005–0.01/GB, and ISP-embedded boxes amortize to near-zero per GB — which is why every serious video platform
+~$0.005–0.01/GB, and ISP-embedded boxes amortize to near-zero per GB, which is why every serious video platform
 eventually builds one.
 `,
     },
@@ -211,18 +211,18 @@ eventually builds one.
       md: `
 **Metadata** is the easy half: a sharded relational store (YouTube famously runs MySQL behind **Vitess**, sharded
 by video/channel) holding video rows, channel rows, and rendition pointers. Kilobytes per video, read on every
-watch page — front it with a cache and replicate reads. The watch page does ~10 metadata lookups and zero video-byte
+watch page; front it with a cache and replicate reads. The watch page does ~10 metadata lookups and zero video-byte
 reads from the database; **the database never touches video bytes**.
 
 **View counting** is the sneaky-hard half. A naive \`UPDATE videos SET views = views + 1\` is a row-lock fight: a
 video doing 100K views/minute serializes 1,600 writes/sec on one hot row, and counts become the top write load of
 the whole site. The scalable shape:
 
-1. **Log, don't update.** Each playback event is appended to Kafka (billions/day — cheap, lock-free).
+1. **Log, don't update.** Each playback event is appended to Kafka (billions/day, cheap and lock-free).
 2. **Aggregate in stream.** A streaming job (Flink/Dataflow) windows events per video for ~10–60 s and emits one
-   batched increment per video per window — turning 100K row updates into ~6 per minute.
+   batched increment per video per window, turning 100K row updates into ~6 per minute.
 3. **Serve approximately, reconcile exactly.** The watch page shows the streamed approximate count (nobody can tell
-   301 views from 304 — YouTube's old "301+ views" froze precisely at the consistency boundary). Billing-grade
+   301 views from 304, and YouTube's old "301+ views" froze precisely at the consistency boundary). Billing-grade
    counts (ads, payouts) come from batch reconciliation over the raw log, with dedup and fraud filtering.
 4. **Dedup/abuse**: count a (user, video) at most once per window; discard non-organic patterns before they reach
    the monetized count.
@@ -239,12 +239,12 @@ the whole site. The scalable shape:
         rows: [
           ['Compression vs H.264', 'Baseline', '~30-40% smaller at same quality', '~50% smaller than H.264, ~30% smaller than VP9'],
           ['Encode cost (software)', '1× (realtime-ish per core-cluster)', '~3-5× H.264', '~10-20× H.264 (SVT-AV1 narrowing this)'],
-          ['Device decode support', 'Universal — every phone/TV since ~2010, hardware decode everywhere', 'Broad — Android, Chrome, most smart TVs; weak on older Apple devices', 'Growing — hardware decode in chips from ~2020-2021 (Snapdragon, Apple A17+, modern TVs)'],
+          ['Device decode support', 'Universal: every phone/TV since ~2010, hardware decode everywhere', 'Broad: Android, Chrome, most smart TVs; weak on older Apple devices', 'Growing: hardware decode in chips from ~2020-2021 (Snapdragon, Apple A17+, modern TVs)'],
           ['Licensing', 'Royalty-bearing (MPEG-LA pool)', 'Royalty-free (Google)', 'Royalty-free (AOMedia: Google, Netflix, Amazon, Apple…)'],
           ['Who serves it', 'The universal fallback rung', 'YouTube default for most playback', 'YouTube/Netflix for popular titles, where encode cost amortizes over millions of plays'],
         ],
         verdict:
-          'Encode everything to H.264 for reach; add VP9/AV1 ladders selectively — premium codecs trade one-time encode CPU for perpetual egress savings, so spend them on videos with views. ~30% bitrate savings at 125 Tbps pays for a lot of encoding.',
+          'Encode everything to H.264 for reach; add VP9/AV1 ladders selectively. Premium codecs trade one-time encode CPU for perpetual egress savings, so spend them on videos with views. ~30% bitrate savings at 125 Tbps pays for a lot of encoding.',
       },
     },
     {
@@ -270,13 +270,13 @@ the whole site. The scalable shape:
       type: 'keyNumbers',
       title: 'Numbers to anchor the design',
       numbers: [
-        { metric: 'Upload rate (YouTube)', value: '500+ hours/minute', context: '720,000 hours/day of new source video — ~2.5 PB/day of masters before transcoding.' },
+        { metric: 'Upload rate (YouTube)', value: '500+ hours/minute', context: '720,000 hours/day of new source video, ~2.5 PB/day of masters before transcoding.' },
         { metric: '1 hour of 1080p', value: '~1-3 GB', context: 'At consumer bitrates (2.5-8 Mbps H.264). A full 8-rung ladder lands around 10 GB per source hour.' },
         { metric: 'AV1 vs VP9 bitrate', value: '~30% smaller', context: 'Same visual quality; AV1 is ~50% smaller than H.264. Costs 10-20× H.264 encode CPU in software.' },
-        { metric: 'Transcode compute', value: '~$0.01-0.05/min (H.264, cloud)', context: 'Cloud transcoding list prices; AV1 multiplies this — why YouTube built the Argos VCU ASIC (20-33× efficiency).' },
-        { metric: 'CDN egress pricing', value: '$0.02-0.085/GB list, <$0.01 negotiated', context: 'At ~125 Tbps average, egress dwarfs storage cost — the whole architecture bends around this line item.' },
+        { metric: 'Transcode compute', value: '~$0.01-0.05/min (H.264, cloud)', context: 'Cloud transcoding list prices; AV1 multiplies this, which is why YouTube built the Argos VCU ASIC (20-33× efficiency).' },
+        { metric: 'CDN egress pricing', value: '$0.02-0.085/GB list, <$0.01 negotiated', context: 'At ~125 Tbps average, egress dwarfs storage cost; the whole architecture bends around this line item.' },
         { metric: 'Watch volume', value: '1B+ hours/day', context: 'Ingest-to-consumption ratio ~1:200. Reads pay the bills and the design optimizes them first.' },
-        { metric: 'Segment length', value: '2-10 s', context: 'The atomic unit of ABR switching, parallel transcoding, and CDN caching — one decision, three systems shaped by it.' },
+        { metric: 'Segment length', value: '2-10 s', context: 'The atomic unit of ABR switching, parallel transcoding, and CDN caching: one decision, three systems shaped by it.' },
       ],
     },
   ],
@@ -285,7 +285,7 @@ the whole site. The scalable shape:
       question: 'Why is video split into 2-10 second segments rather than served as one file with byte-range requests?',
       options: [
         'HTTP cannot serve files larger than 2 GB',
-        'Segments are independently cacheable, independently encodable units — enabling per-segment quality switching, parallel transcoding, and high CDN hit ratios',
+        'Segments are independently cacheable, independently encodable units, enabling per-segment quality switching, parallel transcoding, and high CDN hit ratios',
         'Byte-range requests are not supported by object storage',
         'Segments encrypt better than whole files',
       ],
@@ -298,7 +298,7 @@ the whole site. The scalable shape:
       options: [
         'One worker per video, encoding rungs sequentially from a single pass',
         'Eight workers, one per rung, each encoding the full hour',
-        'Split into ~600 keyframe-aligned segments and fan out each (segment × rung) as an independent idempotent task — ~4,800 parallel jobs',
+        'Split into ~600 keyframe-aligned segments and fan out each (segment × rung) as an independent idempotent task, about 4,800 parallel jobs',
         'Transcode on the creator’s device before upload',
       ],
       answer: 2,
@@ -311,7 +311,7 @@ the whole site. The scalable shape:
         'AV1 is patent-encumbered, so each play costs royalties',
         'AV1 quality is worse than VP9 for most content',
         'Browsers block AV1 for videos with few views',
-        'AV1 costs ~10-20× the encode CPU of H.264 — a one-time cost that only pays off when ~30% bandwidth savings amortize over many plays',
+        'AV1 costs ~10-20× the encode CPU of H.264, a one-time cost that only pays off when ~30% bandwidth savings amortize over many plays',
       ],
       answer: 3,
       explanation:
@@ -321,7 +321,7 @@ the whole site. The scalable shape:
       question: 'What does an origin shield (mid-tier cache) protect against?',
       options: [
         'DDoS attacks on the player manifest',
-        'A newly-popular video causing thousands of edge PoPs to independently fetch the same segments from origin — the shield collapses these into ~one fetch per region',
+        'A newly-popular video causing thousands of edge PoPs to independently fetch the same segments from origin, while the shield collapses these into ~one fetch per region',
         'Viewers downloading videos faster than the CDN allows',
         'Stale manifests being cached at the edge',
       ],
@@ -350,11 +350,11 @@ the whole site. The scalable shape:
     },
     {
       question: 'How does your design change for live streaming instead of video-on-demand?',
-      hint: 'No full file: transcode a continuous stream in realtime with 2-6 s segments appended to a rolling manifest; latency budget (3-30 s glass-to-glass, lower with LL-HLS/chunked CMAF); no lazy codec ladders — you encode what you can in realtime; CDN caches very short-TTL segments; DVR window = retained segments.',
+      hint: 'No full file: transcode a continuous stream in realtime with 2-6 s segments appended to a rolling manifest; latency budget (3-30 s glass-to-glass, lower with LL-HLS/chunked CMAF); no lazy codec ladders, since you encode what you can in realtime; CDN caches very short-TTL segments; DVR window = retained segments.',
       difficulty: 'Senior',
     },
     {
-      question: 'A video goes from 10 views to 10M views in an hour. Trace the load through your system — what breaks first and what saves you?',
+      question: 'A video goes from 10 views to 10M views in an hour. Trace the load through your system. What breaks first and what saves you?',
       hint: 'CDN edges absorb the read storm (immutable segments cache perfectly); origin shield + request coalescing prevents origin herding; view-count pipeline batches harder under load (windows absorb spikes); watch out for: missing premium-codec renditions triggering lazy transcode, metadata cache stampede on the watch page, and comment/like hot partitions.',
       difficulty: 'Mid',
     },
@@ -366,9 +366,9 @@ the whole site. The scalable shape:
   ],
   commonMistakes: [
     'Streaming video bytes through your application servers or storing them in a database. Bytes go client → object storage (signed URLs) and object storage → CDN → client; app servers only ever handle metadata and control flow.',
-    'Designing transcoding as one job per video. A 4-hour 4K upload on one worker takes a day; segment-level fan-out (segment × rung as idempotent tasks) is the difference between hours and minutes — and what makes spot instances usable.',
+    'Designing transcoding as one job per video. A 4-hour 4K upload on one worker takes a day; segment-level fan-out (segment × rung as idempotent tasks) is the difference between hours and minutes. And what makes spot instances usable.',
     'Ignoring egress economics. Candidates obsess over storage (~$0.02/GB-month) when egress (~$0.05+/GB, paid on every view) dominates by 10-100×. Codec choice, per-title encoding, and CDN contracts are cost decisions, not just quality decisions.',
-    'Proposing exact, synchronous view counts. A hot row taking 1,600 locked increments/sec is self-inflicted pain — log events, aggregate in windows, serve approximate counts, reconcile exactly offline for billing.',
+    'Proposing exact, synchronous view counts. A hot row taking 1,600 locked increments/sec is self-inflicted pain. Log events, aggregate in windows, serve approximate counts, reconcile exactly offline for billing.',
     'Transcoding the full premium ladder (VP9 + AV1) for every upload. Most videos get almost no views; encode H.264 eagerly for reach and earn the expensive codecs through popularity thresholds.',
   ],
   cloudMappings: [

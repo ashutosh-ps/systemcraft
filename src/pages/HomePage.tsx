@@ -38,7 +38,7 @@ function Hero({ onSearch }: { onSearch: () => void }) {
             Master <span className="bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent">System Design</span>, one interactive module at a time
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-surface-500 dark:text-surface-400">
-            From load balancers to consensus algorithms to designing YouTube — 19 modules with clickable
+            From load balancers to consensus algorithms to designing YouTube. 19 modules with clickable
             architecture diagrams, capacity calculators, real production numbers, and quizzes that make it stick.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
